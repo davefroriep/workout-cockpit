@@ -600,8 +600,10 @@
         document.getElementById('labelSS2K').textContent = 'SS2K (DISCONNECTED)';
         setTimeout(() => connectSS2KGatt(device), 2500); // Auto-reconnect
       });
-      const server = await device.gatt.connect();
-      const service = await server.getPrimaryService(SS2K_SERVICE_UUID);
+      window.ss2kGattServer = await device.gatt.connect();
+      const server = window.ss2kGattServer;
+      window.ss2kService = await server.getPrimaryService(SS2K_SERVICE_UUID);
+      const service = window.ss2kService;
       ss2kTxChar = await service.getCharacteristic(SS2K_TX_UUID);
       ss2kRxChar = await service.getCharacteristic(SS2K_RX_UUID);
 
@@ -744,7 +746,8 @@
         document.getElementById('labelPolar').textContent = 'POLAR H10';
         setTimeout(() => connectPolarGatt(device), 3000); // Auto-reconnect
       });
-      const server = await device.gatt.connect();
+      window.ss2kGattServer = await device.gatt.connect();
+      const server = window.ss2kGattServer;
       const service = await server.getPrimaryService('heart_rate');
       polarHrChar = await service.getCharacteristic('heart_rate_measurement');
 

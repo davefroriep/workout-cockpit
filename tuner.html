@@ -468,8 +468,10 @@
       dev.removeEventListener('gattserverdisconnected', onBleDisconnected);
       dev.addEventListener('gattserverdisconnected', onBleDisconnected);
 
-      const server = await dev.gatt.connect();
-      const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+      window.bleGattServer = await dev.gatt.connect();
+      const server = window.bleGattServer;
+      window.bleService = await server.getPrimaryService(NUS_SERVICE_UUID);
+      const service = window.bleService;
       bleTxChar = await service.getCharacteristic(NUS_TX_UUID);
       bleRxChar = await service.getCharacteristic(NUS_RX_UUID);
 
