@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SS2K Interactive Live Tuner & Telemetry Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --purple: #a855f7;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+
+    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--card-border); margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+    h1 { font-size: 1.3rem; display: flex; align-items: center; gap: 10px; font-weight: 700; color: #fff; }
+    .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 9999px; font-weight: 600; text-transform: uppercase; background: var(--card-border); color: var(--text-muted); }
+    .badge.connected { background: rgba(34, 197, 94, 0.2); color: var(--success); border: 1px solid var(--success); }
+
+    .conn-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    button { background: var(--card-border); color: var(--text); border: none; padding: 8px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    button:hover { background: #475569; }
+    button:active { transform: scale(0.98); }
+    button.primary { background: var(--accent); color: #000; }
+    button.primary:hover { background: var(--accent-hover); }
+    button.ble-btn { background: #2563eb; color: #fff; }
+    button.ble-btn:hover { background: #1d4ed8; }
+    button.danger { background: var(--danger); color: #fff; }
+    button.danger:hover { background: var(--danger-hover); }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .card-title { font-size: 0.95rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Telemetry Display Boxes */
+    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+    .metric-box { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center; }
+    .metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+    .metric-val { font-size: 1.5rem; font-weight: 800; font-family: monospace; }
+    .metric-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* Stall Indicator */
+    .stall-banner { padding: 10px; border-radius: 6px; font-weight: 700; text-align: center; font-size: 0.9rem; display: none; }
+    .stall-banner.active { display: block; background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger); color: var(--danger); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* Sliders & Controls */
+    .control-row { display: flex; flex-direction: column; gap: 6px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; }
+    input[type=range] { width: 100%; height: 6px; border-radius: 3px; background: #334155; outline: none; -webkit-appearance: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+    .preset-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .preset-btns button { padding: 4px 8px; font-size: 0.75rem; flex: 1; }
+
+    /* Jog Panel */
+    .jog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .jog-grid button { padding: 10px 4px; font-family: monospace; font-size: 0.9rem; }
+    .jog-grid button.fwd { background: #065f46; color: #34d399; }
+    .jog-grid button.fwd:hover { background: #047857; }
+    .jog-grid button.rev { background: #831843; color: #f472b6; }
+    .jog-grid button.rev:hover { background: #9d174d; }
+
+    .run-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .run-btns button { padding: 12px; font-size: 0.95rem; }
+
+    /* Graph Canvas */
+    .chart-container { width: 100%; height: 180px; position: relative; background: #090d16; border-radius: 6px; border: 1px solid var(--card-border); overflow: hidden; }
+    canvas { width: 100%; height: 100%; display: block; }
+    .legend { display: flex; gap: 16px; font-size: 0.75rem; justify-content: center; margin-top: 6px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-color { width: 10px; height: 10px; border-radius: 2px; }
+
+    /* Log Box */
+    .log-container { height: 150px; background: #090d16; border: 1px solid var(--card-border); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; overflow-y: auto; color: #a5f3fc; }
+    .log-line { margin-bottom: 2px; white-space: pre-wrap; }
+    .log-line.warn { color: var(--warning); }
+    .log-line.error { color: var(--danger); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>
+      <span>🚴 SmartSpin2k Live Motor & SG Tuner</span>
+      <span id="connBadge" class="badge">Disconnected</span>
+    </h1>
+    <div class="conn-bar">
+      <button id="btnConnectBle" class="ble-btn">📡 Connect Bluetooth (BLE)</button>
+      <button id="btnConnectSerial" class="primary">🔌 Connect USB Serial (COM)</button>
+      <button id="btnDisconnect" style="display:none;" class="danger">Disconnect</button>
+    </div>
+  </header>
+
+  <div id="stallBanner" class="stall-banner">⚠️ HARD STALL DETECTED (SG &lt; 85)</div>
+
+  <!-- Rehab Mode & Safety Lock Banner -->
+  <div id="rehabBanner" style="background: rgba(16, 185, 129, 0.15); border: 2px solid #10b981; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <div style="font-size: 1.05rem; font-weight: 700; color: #10b981; display: flex; align-items: center; gap: 8px;">
+        <span>🛡️ POST-OP REHAB SAFETY LOCK:</span>
+        <span id="rehabStatusBadge" style="background: #10b981; color: #022c22; font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px; font-weight: 800;">ACTIVE (LOCKED TO LEVEL 1)</span>
+      </div>
+      <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">
+        Zero-resistance floor enforced. Resistance knob is physically held at Top Stop (free spin) to prevent surgical joint strain.
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <label for="chkRehabLock" style="font-size: 0.9rem; font-weight: 600; cursor: pointer; color: #f8fafc;">Lock to Level 1:</label>
+      <input type="checkbox" id="chkRehabLock" checked style="width: 22px; height: 22px; cursor: pointer; accent-color: #10b981;">
+    </div>
+  </div>
+
+  <!-- Dual Mode & Cadence Calibration Row -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+    
+    <!-- Mode Card: Gear Mode vs ERG Mode -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-title">
+        <span>Operating Mode</span>
+        <span id="badgeCurrentMode" class="badge" style="background:#0284c7; color:#fff;">GEAR MODE (1-100)</span>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button id="btnModeGears" onclick="setMode(0)" style="flex: 1; background: #0284c7; font-weight: 700;">⚙️ Gear Mode (1-100)</button>
+        <button id="btnModeERG" onclick="setMode(1)" style="flex: 1; background: #334155; font-weight: 700;">⚡ ERG Mode (Watts)</button>
+      </div>
+      <div id="ergControlRow" style="display: none; background: rgba(15,23,42,0.5); padding: 10px; border-radius: 6px; border: 1px solid var(--card-border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-weight: 600; font-size: 0.9rem;">Target ERG Power:</span>
+          <span id="labelTgtWatts" style="font-size: 1.2rem; font-weight: 800; color: #ec4899;">0 W</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button onclick="adjustTargetWatts(-10)" style="flex: 1; background: #475569;">-10 W</button>
+          <button onclick="adjustTargetWatts(-5)" style="flex: 1; background: #475569;">-5 W</button>
+          <button onclick="adjustTargetWatts(5)" style="flex: 1; background: #be185d;">+5 W</button>
+          <button onclick="adjustTargetWatts(10)" style="flex: 1; background: #be185d;">+10 W</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cadence Ratio & Pulse Accumulator Card -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-title">
+        <span>Flywheel Cadence & Ratio Calibration</span>
+        <button onclick="resetCadencePulses()" style="padding: 2px 8px; font-size: 0.75rem; background: #6366f1;">🔄 Reset Pulses</button>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div>
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Accumulated Pulses</div>
+          <div id="valLivePulses" style="font-size: 1.4rem; font-weight: 800; color: #818cf8; font-family: monospace;">0</div>
+        </div>
+        <div>
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Flywheel Pulley Ratio</div>
+          <div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+            <input type="number" id="inputRatio" min="0.5" max="10.0" step="0.05" value="1.00" style="width: 75px; padding: 4px 6px; font-size: 0.9rem; background: #0f172a; border: 1px solid var(--card-border); color: #fff; border-radius: 4px;">
+            <button onclick="applyPulleyRatio()" style="padding: 4px 8px; font-size: 0.8rem; background: #059669;">Apply</button>
+          </div>
+        </div>
+      </div>
+      <div style="font-size: 0.75rem; color: #94a3b8; line-height: 1.3;">
+        💡 <b>Calibration Test:</b> Click <i>Reset Pulses</i>, pedal exactly 100 crank turns, then set Ratio = (Total Pulses / 100).
+      </div>
+    </div>
+
+  </div>
+
+
+  <div class="grid">
+
+    <!-- Card 1: Live Telemetry -->
+    <div class="card">
+      <div class="card-title">
+        <span>Live Sensors & TMC2209 Telemetry</span>
+        <span id="motorStateBadge" class="badge">STOPPED</span>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-box">
+          <div class="metric-label">StallGuard (SG_RESULT)</div>
+          <div id="valSG" class="metric-val" style="color: var(--accent);">--</div>
+          <div class="metric-sub">Healthy: &gt;100 | Stall: &lt;85</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Potentiometer ADC</div>
+          <div id="valPot" class="metric-val" style="color: var(--success);">--</div>
+          <div id="valVolts" class="metric-sub">0.00 V</div>
+          <div id="valResistanceZone" style="font-size:0.75rem; font-weight:600; color:var(--accent); margin-top:3px;">--</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Microstep Position</div>
+          <div id="valPos" class="metric-val">0</div>
+          <div class="metric-sub"><button id="btnZero" style="padding: 2px 6px; font-size: 0.7rem;">Zero Position</button></div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Cadence (Flywheel)</div>
+          <div id="valCadence" class="metric-val" style="color: var(--purple);">0</div>
+          <div id="valPulses" class="metric-sub">0 pulses</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Bowflex C7 Level</div>
+          <div id="valC7Level" class="metric-val" style="color: #f59e0b;">--</div>
+          <div id="valLevelSub" class="metric-sub">Calibrated Scale</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Estimated Power</div>
+          <div id="valWatts" class="metric-val" style="color: #ec4899;">--</div>
+          <div id="valWattsSub" class="metric-sub">0 W @ 0 RPM</div>
+        </div>
+      </div>
+
+      <!-- Realtime Chart -->
+      <div class="chart-container">
+        <canvas id="liveChart"></canvas>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background:#38bdf8;"></div> StallGuard (SG_RESULT)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#22c55e;"></div> Pot ADC / 10</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ef4444;"></div> Stall Threshold</div>
+      </div>
+    </div>
+
+    <!-- Card 2: Interactive Controls & Amps -->
+    <div class="card">
+      <div class="card-title">Motor Current & Velocity</div>
+
+      <!-- Current Slider -->
+      <div class="control-row">
+        <div class="slider-header">
+          <span>Stepper Current (mA RMS):</span>
+          <span id="labelCurrent" style="color: var(--accent); font-family: monospace;">750 mA</span>
+        </div>
+        <input type="range" id="sliderCurrent" min="150" max="1100" step="25" value="750">
+        <div class="preset-btns">
+          <button onclick="setMa(400)">400 mA (Gentle)</button>
+          <button onclick="setMa(600)">600 mA (Medium)</button>
+          <button onclick="setMa(750)">750 mA (Normal)</button>
+          <button onclick="setMa(900)">900 mA (High)</button>
+          <button onclick="setMa(1000)">1000 mA (Max)</button>
+        </div>
+      </div>
+
+      <!-- Speed Slider -->
+      <div class="control-row">
+        <div class="slider-header">
+          <span>Speed (Microsteps/sec):</span>
+          <span id="labelSpeed" style="color: var(--accent); font-family: monospace;">1500 Hz</span>
+        </div>
+        <input type="range" id="sliderSpeed" min="400" max="4000" step="100" value="1500">
+      </div>
+
+      <!-- Safety Auto-Stop Toggle -->
+      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(15,23,42,0.4); padding:8px; border-radius:6px; border:1px solid var(--card-border);">
+        <label for="chkAutoStop" style="font-size:0.85rem; font-weight:600; cursor:pointer;">Auto-Stop Motor if Stalled (SG &lt; 85):</label>
+        <input type="checkbox" id="chkAutoStop" checked style="width:18px; height:18px; cursor:pointer;">
+      </div>
+
+      <!-- E-STOP -->
+      <button id="btnStop" class="danger" style="padding: 14px; font-size: 1.1rem; letter-spacing: 1px;">
+        🛑 EMERGENCY STOP (Spacebar)
+      </button>
+    </div>
+
+    <!-- Card 3: Real-Time JOG Navigation -->
+    <div class="card">
+      <div class="card-title">Manual Jog & Navigation</div>
+
+      <div style="font-size:0.85rem; background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:6px; border:1px solid var(--card-border); margin-bottom:8px;">
+        <div style="color:var(--danger); font-weight:700;">➕ [+] MORE RESISTANCE (Drives to 0 ADC / Heavy)</div>
+        <div style="color:var(--accent); font-weight:700; margin-top:2px;">➖ [-] LESS RESISTANCE (Drives to 4095 ADC / Light)</div>
+      </div>
+
+      <div style="font-size:0.75rem; text-transform:uppercase; color:var(--danger); font-weight:700; margin-top:4px;">Jog MORE Resistance (+) [Toward 0 ADC]:</div>
+      <div class="jog-grid">
+        <button class="fwd" onclick="jog(50)">+50</button>
+        <button class="fwd" onclick="jog(250)">+250</button>
+        <button class="fwd" onclick="jog(1000)">+1000</button>
+        <button class="fwd" onclick="jog(2500)">+2500</button>
+      </div>
+
+      <div style="font-size:0.75rem; text-transform:uppercase; color:var(--accent); font-weight:700; margin-top:8px;">Jog LESS Resistance (-) [Toward 4095 ADC]:</div>
+      <div class="jog-grid">
+        <button class="rev" onclick="jog(-50)">-50</button>
+        <button class="rev" onclick="jog(-250)">-250</button>
+        <button class="rev" onclick="jog(-1000)">-1000</button>
+        <button class="rev" onclick="jog(-2500)">-2500</button>
+      </div>
+
+      <div class="run-btns" style="margin-top:10px;">
+        <button class="fwd" onclick="runContinuous(1)">➕ Run MORE Resistance (+)</button>
+        <button class="rev" onclick="runContinuous(-1)">➖ Run LESS Resistance (-)</button>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:8px;">
+        <button onclick="unwedge('FWD')" style="font-size:0.8rem; background:#475569;">🔨 Unwedge More Res (950mA)</button>
+        <button onclick="unwedge('REV')" style="font-size:0.8rem; background:#475569;">🔨 Unwedge Less Res (950mA)</button>
+      </div>
+    </div>
+
+    <!-- Card 4: Console Log & CSV Export -->
+    <div class="card">
+      <div class="card-title">
+        <span>Telemetry Stream & Logging</span>
+        <button id="btnExportCsv" style="padding:4px 8px; font-size:0.75rem; background:#047857;">📥 Export CSV</button>
+      </div>
+      <div id="logBox" class="log-container"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- State Variables ---
+    let transport = null; // 'ble' or 'serial'
+    let serialPort = null;
+    let serialReader = null;
+    let serialWriter = null;
+    let bleDevice = null;
+    let bleTxChar = null;
+    let bleRxChar = null;
+
+    let chartData = [];
+    const MAX_CHART_POINTS = 100;
+    let logRecords = []; // for CSV export
+
+    const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+    const NUS_RX_UUID      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+    const NUS_TX_UUID      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+    // UI Elements
+    const badge = document.getElementById('connBadge');
+    const btnConnectBle = document.getElementById('btnConnectBle');
+    const btnConnectSerial = document.getElementById('btnConnectSerial');
+    const btnDisconnect = document.getElementById('btnDisconnect');
+    const stallBanner = document.getElementById('stallBanner');
+    const motorStateBadge = document.getElementById('motorStateBadge');
+
+    const valSG = document.getElementById('valSG');
+    const valPot = document.getElementById('valPot');
+    const valVolts = document.getElementById('valVolts');
+    const valPos = document.getElementById('valPos');
+    const valCadence = document.getElementById('valCadence');
+    const valPulses = document.getElementById('valPulses');
+    const valC7Level = document.getElementById('valC7Level');
+    const valLevelSub = document.getElementById('valLevelSub');
+    const valWatts = document.getElementById('valWatts');
+    const valWattsSub = document.getElementById('valWattsSub');
+
+    // --- C7 Calibrated Power Model ---
+    function bowflexToPeloton(b) {
+      if (b > 54.0) return b;
+      if (b <= 5.0) return 20.0 + (b - 1.0) * 1.25;
+      const disc = Math.max(0, 1.7424 - 0.16 * (11.8 - b));
+      return (1.32 + Math.sqrt(disc)) / 0.08;
+    }
+
+    function calcC7Watts(level, cad) {
+      if (cad <= 15 || level <= 0) return 0.0;
+      const calLevel = Math.min(100.0, level + 1.1);
+      const p = bowflexToPeloton(calLevel);
+      const gCad = (0.01243107769 * cad * cad) + (1.145964912 * cad) - 23.50977444;
+      if (gCad <= 0) return 0.0;
+      const fRes = (0.1469553975 * p * p) - (5.841344538 * p) + 97.62165482;
+      return Math.max(0.0, (fRes * gCad) / 132.0);
+    }
+
+    const sliderCurrent = document.getElementById('sliderCurrent');
+    const labelCurrent = document.getElementById('labelCurrent');
+    const sliderSpeed = document.getElementById('sliderSpeed');
+    const labelSpeed = document.getElementById('labelSpeed');
+    const chkAutoStop = document.getElementById('chkAutoStop');
+    const logBox = document.getElementById('logBox');
+
+    // --- Logger ---
+    function log(msg, type='') {
+      const line = document.createElement('div');
+      line.className = 'log-line ' + type;
+      const ts = new Date().toISOString().substring(11, 23);
+      line.textContent = `[${ts}] ${msg}`;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // --- Web Serial Connection ---
+    btnConnectSerial.addEventListener('click', async () => {
+      try {
+        if (!navigator.serial) {
+          alert('Web Serial is only supported in Chrome, Edge, and Opera browsers over HTTPS or localhost.');
+          return;
+        }
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 115200 });
+        transport = 'serial';
+        updateConnState(true, 'USB Serial (115200)');
+        readSerialLoop();
+      } catch (err) {
+        log('Serial connection failed: ' + err.message, 'error');
+      }
+    });
+
+    async function readSerialLoop() {
+      const textDecoder = new TextDecoderStream();
+      const readableStreamClosed = serialPort.readable.pipeTo(textDecoder.writable);
+      serialReader = textDecoder.readable.getReader();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { value, done } = await serialReader.read();
+          if (done) break;
+          if (value) {
+            buffer += value;
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep partial line
+            for (const line of lines) {
+              handleIncomingLine(line.trim());
+            }
+          }
+        }
+      } catch (err) {
+        log('Serial read error: ' + err.message, 'error');
+      } finally {
+        serialReader.releaseLock();
+      }
+    }
+
+    // --- Web Bluetooth Connection ---
+    btnConnectBle.addEventListener('click', async () => {
+      try {
+        if (!navigator.bluetooth) {
+          alert('Web Bluetooth is supported in Chrome, Edge, and Android over HTTPS or localhost.');
+          return;
+        }
+        log('Scanning for SS2K_Tuner Bluetooth device...');
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'SS2K_Tuner' }],
+          optionalServices: [NUS_SERVICE_UUID]
+        });
+
+        bleDevice.addEventListener('gattserverdisconnected', onBleDisconnected);
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+        bleTxChar = await service.getCharacteristic(NUS_TX_UUID);
+        bleRxChar = await service.getCharacteristic(NUS_RX_UUID);
+
+        await bleTxChar.startNotifications();
+        bleTxChar.addEventListener('characteristicvaluechanged', (e) => {
+          const value = new TextDecoder().decode(e.target.value);
+          handleIncomingLine(value.trim());
+        });
+
+        transport = 'ble';
+        updateConnState(true, 'Bluetooth (BLE)');
+      } catch (err) {
+        log('BLE connection failed: ' + err.message, 'error');
+      }
+    });
+
+    function onBleDisconnected() {
+      log('Bluetooth device disconnected.', 'warn');
+      updateConnState(false);
+    }
+
+    // --- Disconnect Handler ---
+    btnDisconnect.addEventListener('click', async () => {
+      if (transport === 'serial' && serialPort) {
+        try {
+          if (serialReader) await serialReader.cancel();
+          await serialPort.close();
+        } catch (e) {}
+        serialPort = null;
+      } else if (transport === 'ble' && bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+      updateConnState(false);
+    });
+
+    function updateConnState(connected, label='') {
+      if (connected) {
+        badge.className = 'badge connected';
+        badge.textContent = 'Connected: ' + label;
+        btnConnectBle.style.display = 'none';
+        btnConnectSerial.style.display = 'none';
+        btnDisconnect.style.display = 'inline-flex';
+        log('Connected via ' + label, 'warn');
+      } else {
+        badge.className = 'badge';
+        badge.textContent = 'Disconnected';
+        btnConnectBle.style.display = 'inline-flex';
+        btnConnectSerial.style.display = 'inline-flex';
+        btnDisconnect.style.display = 'none';
+        transport = null;
+      }
+    }
+
+    // --- Send Command ---
+    async function sendCommand(cmd) {
+      if (!transport) {
+        log('Cannot send "' + cmd + '": Not connected!', 'error');
+        return;
+      }
+      const data = cmd + '\n';
+      try {
+        if (transport === 'serial' && serialPort && serialPort.writable) {
+          const encoder = new TextEncoder();
+          const writer = serialPort.writable.getWriter();
+          await writer.write(encoder.encode(data));
+          writer.releaseLock();
+        } else if (transport === 'ble' && bleRxChar) {
+          const encoder = new TextEncoder();
+          await bleRxChar.writeValue(encoder.encode(data));
+        }
+      } catch (err) {
+        log('Send error: ' + err.message, 'error');
+      }
+    }
+
+    // --- Parse Telemetry JSON ---
+    function handleIncomingLine(line) {
+      if (!line) return;
+      if (!line.startsWith('{')) {
+        log(line);
+        return;
+      }
+      try {
+        const d = JSON.parse(line);
+        updateUI(d);
+      } catch (e) {
+        log(line);
+      }
+    }
+
+    function updateUI(d) {
+
+      // Update Pulse Count & Modes from Telemetry
+      if (d.pls !== undefined && valLivePulses) {
+        valLivePulses.textContent = d.pls.toLocaleString();
+        const vp = document.getElementById('valPulses');
+        if (vp) vp.textContent = d.pls.toLocaleString() + ' pulses';
+      }
+      if (d.rehab !== undefined && chkRehabLock) {
+        chkRehabLock.checked = (d.rehab === 1);
+        updateRehabVisuals(d.rehab === 1);
+      }
+      if (d.tgt_w !== undefined && labelTgtWatts) {
+        activeTargetWatts = d.tgt_w;
+        labelTgtWatts.textContent = d.tgt_w + ' W';
+      }
+
+      // Metrics
+      valSG.textContent = d.sg;
+      if (d.sg < 25) { valSG.style.color = 'var(--danger)'; }
+      else if (d.sg < 100) { valSG.style.color = 'var(--warning)'; }
+      else { valSG.style.color = 'var(--accent)'; }
+
+      valPot.textContent = d.pot;
+      valVolts.textContent = d.v.toFixed(2) + ' V';
+      const rZone = document.getElementById('valResistanceZone');
+      if (rZone) {
+        if (d.pot >= 4050) {
+          rZone.textContent = 'MIN RESISTANCE (Light / Top Stop)';
+          rZone.style.color = 'var(--accent)';
+        } else if (d.pot <= 50) {
+          rZone.textContent = 'MAX RESISTANCE (Heavy / Full Sled)';
+          rZone.style.color = 'var(--danger)';
+        } else {
+          const pct = ((4095 - d.pot) / 4095 * 100).toFixed(0);
+          rZone.textContent = `Active Range: ~${pct}% Resistance`;
+          rZone.style.color = 'var(--success)';
+        }
+      }
+      valPos.textContent = d.pos.toLocaleString();
+      valCadence.textContent = d.cad.toFixed(0) + ' RPM';
+
+      // Hybrid C7 Level & Wattage Estimator:
+      // Potentiometer is Ground Truth (Active Sled Position); Stepper used only in deadband
+      const TOP_DEADBAND_STEPS = 1940.0;
+      const BOTTOM_DEADBAND_START = 35690.0;
+      const TOTAL_TRAVEL_STEPS = 49640.0;
+      const LVL_ACTIVE_START = 4.87;
+      const LVL_ACTIVE_END = 72.18;
+
+      let c7Level = 1.0;
+      let trackingSource = 'POT ABSOLUTE';
+
+      if (d.pot < 4075 && d.pot > 20) {
+        // ACTIVE POT ZONE: Direct absolute magnetic sled measurement
+        const potFrac = (4095.0 - d.pot) / 4095.0;
+        c7Level = LVL_ACTIVE_START + (potFrac * (LVL_ACTIVE_END - LVL_ACTIVE_START));
+        trackingSource = 'POT ABSOLUTE (Active Sled)';
+      } else if (d.pot >= 4075) {
+        // TOP DEADBAND: Pot saturated at 4095 (Levels 1.0 to 13.2)
+        if (d.pos <= 0) c7Level = 1.0;
+        else if (d.pos >= TOP_DEADBAND_STEPS) c7Level = LVL_ACTIVE_START;
+        else c7Level = 1.0 + (d.pos / TOP_DEADBAND_STEPS) * (LVL_ACTIVE_START - 1.0);
+        trackingSource = 'TOP DEADBAND (Stepper)';
+      } else {
+        // BOTTOM DEADBAND: Pot saturated at 0 (Levels 81.7 to 100.0)
+        if (d.pos <= BOTTOM_DEADBAND_START) c7Level = LVL_ACTIVE_END;
+        else if (d.pos >= TOTAL_TRAVEL_STEPS) c7Level = 100.0;
+        else {
+          const dbSpan = TOTAL_TRAVEL_STEPS - BOTTOM_DEADBAND_START;
+          c7Level = LVL_ACTIVE_END + ((d.pos - BOTTOM_DEADBAND_START) / dbSpan) * (100.0 - LVL_ACTIVE_END);
+        }
+        trackingSource = 'BOTTOM DEADBAND (Stepper)';
+      }
+
+      c7Level = Math.max(1.0, Math.min(100.0, c7Level));
+      valC7Level.textContent = 'Lvl ' + c7Level.toFixed(1);
+      valLevelSub.textContent = trackingSource;
+      valLevelSub.style.color = trackingSource.startsWith('POT') ? 'var(--success)' : 'var(--warning)';
+
+
+      const estWatts = calcC7Watts(c7Level, d.cad);
+      valWatts.textContent = `${estWatts.toFixed(0)} W`;
+      valWattsSub.textContent = `${estWatts.toFixed(1)} W @ ${d.cad.toFixed(0)} RPM`;
+
+      if (d.run) {
+        motorStateBadge.textContent = 'RUNNING';
+        motorStateBadge.className = 'badge connected';
+      } else {
+        motorStateBadge.textContent = 'STOPPED';
+        motorStateBadge.className = 'badge';
+      }
+
+      if (d.stall) {
+        stallBanner.className = 'stall-banner active';
+      } else {
+        stallBanner.className = 'stall-banner';
+      }
+
+      // Add to Chart
+      addChartPoint(d.sg, d.pot / 10.0);
+
+      // Save record for CSV
+      logRecords.push({
+        time: new Date().toISOString(),
+        pos: d.pos,
+        pot: d.pot,
+        v: d.v,
+        sg: d.sg,
+        ma: d.ma,
+        spd: d.spd,
+        run: d.run,
+        cad: d.cad,
+        stall: d.stall
+      });
+      if (logRecords.length > 5000) logRecords.shift();
+    }
+
+    // --- Chart Rendering ---
+    const canvas = document.getElementById('liveChart');
+    const ctx = canvas.getContext('2d');
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function addChartPoint(sg, potDiv10) {
+      chartData.push({ sg, potDiv10 });
+      if (chartData.length > MAX_CHART_POINTS) chartData.shift();
+      drawChart();
+    }
+
+    function drawChart() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (chartData.length < 2) return;
+
+      const w = canvas.width;
+      const h = canvas.height;
+      const maxVal = 500; // SG range 0-500
+
+      // Draw grid lines
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      for (let y = 0; y <= maxVal; y += 100) {
+        const py = h - (y / maxVal) * h;
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(w, py);
+        ctx.stroke();
+      }
+
+      // Draw Stall Threshold line at 20
+      const stallY = h - (85 / maxVal) * h;
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, stallY);
+      ctx.lineTo(w, stallY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw SG line (Blue)
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      chartData.forEach((pt, i) => {
+        const x = (i / (MAX_CHART_POINTS - 1)) * w;
+        const y = h - (Math.min(pt.sg, maxVal) / maxVal) * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Draw Pot line (Green)
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      chartData.forEach((pt, i) => {
+        const x = (i / (MAX_CHART_POINTS - 1)) * w;
+        const y = h - (Math.min(pt.potDiv10, maxVal) / maxVal) * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    // --- Interactive Action Handlers ---
+    function jog(steps) {
+      sendCommand('JOG:' + steps);
+      log('Jogging ' + (steps > 0 ? '+' : '') + steps + ' steps');
+    }
+
+    function runContinuous(dir) {
+      sendCommand('RUN:' + dir);
+      log('Continuous run ' + (dir > 0 ? 'Forward (+)' : 'Backward (-)'));
+    }
+
+    function setMa(ma) {
+      sliderCurrent.value = ma;
+      labelCurrent.textContent = ma + ' mA';
+      sendCommand('SET_MA:' + ma);
+      log('Motor current set to ' + ma + ' mA');
+    }
+
+    sliderCurrent.addEventListener('input', (e) => {
+      const ma = e.target.value;
+      labelCurrent.textContent = ma + ' mA';
+      sendCommand('SET_MA:' + ma);
+    });
+
+    sliderSpeed.addEventListener('input', (e) => {
+      const spd = e.target.value;
+      labelSpeed.textContent = spd + ' Hz';
+      sendCommand('SET_SPEED:' + spd);
+    });
+
+    chkAutoStop.addEventListener('change', (e) => {
+      const val = e.target.checked ? 1 : 0;
+      sendCommand('AUTO_STOP:' + val);
+      log('Auto-Stop on Stall set to: ' + (val ? 'ENABLED' : 'DISABLED'));
+    });
+
+    document.getElementById('btnStop').addEventListener('click', () => {
+      sendCommand('STOP');
+      log('EMERGENCY STOP COMMAND SENT', 'error');
+    });
+
+    document.getElementById('btnZero').addEventListener('click', () => {
+      sendCommand('ZERO');
+      log('Position counter reset to 0');
+    });
+
+    function unwedge(dir) {
+      sendCommand('UNWEDGE_' + dir);
+      log('High-torque unwedging pulse ' + dir);
+    }
+
+    // Spacebar E-STOP & Arrow Jogging
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        sendCommand('STOP');
+      } else if (e.code === 'ArrowUp' || e.code === 'ArrowRight') {
+        e.preventDefault();
+        jog(250);
+      } else if (e.code === 'ArrowDown' || e.code === 'ArrowLeft') {
+        e.preventDefault();
+        jog(-250);
+      }
+    });
+
+    // --- CSV Export ---
+    document.getElementById('btnExportCsv').addEventListener('click', () => {
+      if (logRecords.length === 0) {
+        alert('No data logged yet!');
+        return;
+      }
+      let csv = 'Timestamp,StepPos,PotADC,Volts,SG_RESULT,Current_mA,Speed_Hz,Running,Cadence_RPM,Stall\n';
+      logRecords.forEach(r => {
+        csv += `${r.time},${r.pos},${r.pot},${r.v},${r.sg},${r.ma},${r.spd},${r.run},${r.cad},${r.stall}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ss2k_tuning_log_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  
+    // --- Rehab & Mode Control Handlers ---
+    let activeControlMode = 0; // 0 = Gears, 1 = ERG
+    let activeTargetWatts = 0;
+
+    const chkRehabLock = document.getElementById('chkRehabLock');
+    const rehabStatusBadge = document.getElementById('rehabStatusBadge');
+    const rehabBanner = document.getElementById('rehabBanner');
+    const badgeCurrentMode = document.getElementById('badgeCurrentMode');
+    const ergControlRow = document.getElementById('ergControlRow');
+    const labelTgtWatts = document.getElementById('labelTgtWatts');
+    const valLivePulses = document.getElementById('valLivePulses');
+    const inputRatio = document.getElementById('inputRatio');
+
+    if (chkRehabLock) {
+      chkRehabLock.addEventListener('change', (e) => {
+        const en = e.target.checked ? 1 : 0;
+        sendCommand('SET_REHAB:' + en);
+        updateRehabVisuals(en);
+        log('Rehab Safe Lock set to: ' + (en ? 'ENABLED (Locked to Level 1)' : 'DISABLED'));
+      });
+    }
+
+    function updateRehabVisuals(en) {
+      if (rehabStatusBadge && rehabBanner) {
+        if (en) {
+          rehabStatusBadge.textContent = 'ACTIVE (LOCKED TO LEVEL 1)';
+          rehabStatusBadge.style.background = '#10b981';
+          rehabStatusBadge.style.color = '#022c22';
+          rehabBanner.style.borderColor = '#10b981';
+        } else {
+          rehabStatusBadge.textContent = 'UNLOCKED (FULL RANGE)';
+          rehabStatusBadge.style.background = '#eab308';
+          rehabStatusBadge.style.color = '#422006';
+          rehabBanner.style.borderColor = '#eab308';
+        }
+      }
+    }
+
+    function setMode(m) {
+      activeControlMode = m;
+      sendCommand('SET_MODE:' + m);
+      if (m === 1) {
+        badgeCurrentMode.textContent = 'ERG MODE (WATTS)';
+        badgeCurrentMode.style.background = '#ec4899';
+        ergControlRow.style.display = 'block';
+        document.getElementById('btnModeGears').style.background = '#334155';
+        document.getElementById('btnModeERG').style.background = '#be185d';
+        log('Switched to ERG Mode');
+      } else {
+        badgeCurrentMode.textContent = 'GEAR MODE (1-100)';
+        badgeCurrentMode.style.background = '#0284c7';
+        ergControlRow.style.display = 'none';
+        document.getElementById('btnModeGears').style.background = '#0284c7';
+        document.getElementById('btnModeERG').style.background = '#334155';
+        log('Switched to Gear Mode (1-100)');
+      }
+    }
+
+    function adjustTargetWatts(dw) {
+      activeTargetWatts = Math.max(0, Math.min(800, activeTargetWatts + dw));
+      labelTgtWatts.textContent = activeTargetWatts + ' W';
+      sendCommand('SET_WATTS:' + activeTargetWatts);
+      log('Target Watts: ' + activeTargetWatts + ' W');
+    }
+
+    function resetCadencePulses() {
+      sendCommand('RESET_PULSES');
+      if (valLivePulses) valLivePulses.textContent = '0';
+      log('Cadence pulse counter reset to 0');
+    }
+
+    function applyPulleyRatio() {
+      const r = parseFloat(inputRatio.value);
+      if (r > 0.1 && r < 20.0) {
+        sendCommand('SET_RATIO:' + r.toFixed(3));
+        log('Applied Flywheel Pulley Ratio: ' + r.toFixed(3));
+      }
+    }
+
+  </script>
+</body>
+</html>
