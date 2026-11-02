@@ -95,6 +95,7 @@
     <h1>
       <span>🚴 SmartSpin2k Live Motor & SG Tuner</span>
       <span id="connBadge" class="badge">Disconnected</span>
+      <span id="badgeDrops" class="badge" style="background:#1e293b; color:#94a3b8; border:1px solid #334155;">Drops: 0</span>
     </h1>
     <div class="conn-bar">
       <button id="btnConnectBle" class="ble-btn">📡 Connect Bluetooth (BLE)</button>
@@ -476,9 +477,17 @@
       bleRxChar = await service.getCharacteristic(NUS_RX_UUID);
 
       await bleTxChar.startNotifications();
+      let bleRxAccumulator = '';
       bleTxChar.addEventListener('characteristicvaluechanged', (e) => {
-        const value = new TextDecoder().decode(e.target.value);
-        handleIncomingLine(value.trim());
+        const chunk = new TextDecoder().decode(e.target.value);
+        bleRxAccumulator += chunk;
+        const lines = bleRxAccumulator.split('\n');
+        if (lines.length > 1) {
+          bleRxAccumulator = lines.pop(); // Retain partial tail
+          for (const line of lines) {
+            handleIncomingLine(line.trim());
+          }
+        }
       });
 
       transport = 'ble';
@@ -521,8 +530,18 @@
       }
     });
 
-    function onBleDisconnected() {
-      log('Bluetooth connection lost.', 'warn');
+    let bleDropCount = 0;
+    function onBleDisconnected(e) {
+      bleDropCount++;
+      const timeStr = new Date().toLocaleTimeString();
+      const bDrops = document.getElementById('badgeDrops');
+      if (bDrops) {
+        bDrops.textContent = `Drops: ${bleDropCount}`;
+        bDrops.style.background = 'rgba(239, 68, 68, 0.2)';
+        bDrops.style.borderColor = 'var(--danger)';
+        bDrops.style.color = 'var(--danger)';
+      }
+      log(`⚠️ Bluetooth GATT link severed (#${bleDropCount}) at ${timeStr}`, 'error');
       if (!userDisconnected && bleDevice) {
         badge.className = 'badge warning';
         badge.textContent = 'Conn Lost - Reconnecting...';
@@ -962,7 +981,7 @@
 
   <footer style="margin-top: 24px; padding: 12px 4px; text-align: center; font-size: 0.75rem; color: #94a3b8; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K CALIBRATION & DIAGNOSTICS</span>
-    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v4.2 • 2026-11-02 18:15</span>
+    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v4.3 • 2026-11-02 18:20</span>
   </footer>
 
 </body>
