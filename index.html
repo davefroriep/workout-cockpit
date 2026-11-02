@@ -346,6 +346,10 @@
       <span>SS2K</span> COCKPIT
     </div>
     <div class="status-group">
+      <div id="btnFlightRec" class="conn-badge" onclick="syncFlightRecorder()" title="SS2K Onboard Flight Recorder: Tap to Sync/Download CSV" style="cursor:pointer;">
+        <div class="conn-dot" style="background:#ef4444;"></div>
+        <span id="labelFlightRec">REC: 0s</span>
+      </div>
       <div id="btnConnectPolar" class="conn-badge" onclick="pairPolarH10()">
         <div class="conn-dot"></div>
         <span id="labelPolar">POLAR H10</span>
@@ -505,6 +509,13 @@
         <label>Flywheel Pulley Ratio (Calibrated):</label>
         <input type="number" step="0.01" id="cfgRatio" value="3.80">
       </div>
+      <div class="form-row" style="margin-top: 14px; border-top: 1px solid #334155; padding-top: 12px;">
+        <label>SS2K Onboard Flight Recorder (ESP32 Flash):</label>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button type="button" style="background:#059669; color:#fff; font-size:0.8rem; padding:8px;" onclick="syncFlightRecorder()">📥 Download Workout CSV</button>
+          <button type="button" style="background:#dc2626; color:#fff; font-size:0.8rem; padding:8px;" onclick="clearFlightRecorder()">🗑️ Clear Flash</button>
+        </div>
+      </div>
       <div class="modal-btns">
         <button style="background:#334155; color:#fff;" onclick="closeSettings()">Cancel</button>
         <button style="background:var(--cyan); color:#022c22;" onclick="saveSettings()">Save & Apply</button>
@@ -630,9 +641,42 @@
     }
 
     // --- Parse SS2K Telemetry ---
+    
+    // --- SS2K Onboard Flash Flight Recorder Sync Engine ---
+    let isDumpingRec = false;
+    let recDumpLines = [];
+
+    function syncFlightRecorder() {
+      if (!ss2kRxChar || !ss2kDevice || !ss2kDevice.gatt.connected) {
+        alert("Please connect to SS2K via Bluetooth first!");
+        return;
+      }
+      recDumpLines = [];
+      isDumpingRec = true;
+      const lbl = document.getElementById('labelFlightRec');
+      if (lbl) lbl.textContent = 'SYNCING...';
+      sendSS2KCmd('REC_DUMP');
+    }
+
+    function clearFlightRecorder() {
+      if (confirm("Clear all recorded workout history from SS2K hardware flash?")) {
+        sendSS2KCmd('REC_CLEAR');
+        alert("SS2K workout memory cleared.");
+      }
+    }
+
     let rxBuffer = '';
     function parseSS2KTelemetry(chunk) {
       if (!chunk) return;
+      if (chunk.includes('REC_DATA:')) {
+        const parts = chunk.split('\n');
+        for (const p of parts) {
+          const pt = p.trim();
+          if (pt.startsWith('REC_DATA:')) {
+            recDumpLines.push(pt.substring(9));
+          }
+        }
+      }
       const trimmed = chunk.trim();
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         try {
@@ -668,6 +712,50 @@
     }
 
     function updateSS2KUI(d) {
+      if (d.rec_dump === 'START') {
+        recDumpLines = [];
+        isDumpingRec = true;
+        return;
+      }
+      if (d.rec_dump === 'EMPTY') {
+        alert("SS2K Flight Recorder is empty - no workout saved yet.");
+        isDumpingRec = false;
+        const lbl = document.getElementById('labelFlightRec');
+        if (lbl) lbl.textContent = 'REC: 0s';
+        return;
+      }
+      if (d.rec_dump === 'END') {
+        isDumpingRec = false;
+        if (recDumpLines.length > 0) {
+          const csvContent = recDumpLines.join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const nowStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          a.href = url;
+          a.download = `SS2K_Workout_${nowStr}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          alert(`✅ Synced & downloaded ${recDumpLines.length} points from SS2K hardware flash!`);
+        }
+        return;
+      }
+      if (d.rec !== undefined) {
+        const bRec = document.getElementById('btnFlightRec');
+        const lRec = document.getElementById('labelFlightRec');
+        if (bRec && lRec && !isDumpingRec) {
+          if (d.rec === 1) {
+            bRec.className = 'conn-badge active-hr';
+            lRec.textContent = `REC: ${d.pts || 0}s`;
+          } else {
+            bRec.className = 'conn-badge';
+            lRec.textContent = `REC: ${d.pts || 0}s`;
+          }
+        }
+      }
+
       // Live Cadence
       liveCadence = d.cad;
       document.getElementById('valCadence').textContent = d.cad.toFixed(0);
@@ -1033,7 +1121,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v4.3 • 2026-11-02 18:20</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v4.4 • 2026-11-02 18:35</span>
   </footer>
 
 </body>

@@ -100,6 +100,8 @@
     <div class="conn-bar">
       <button id="btnConnectBle" class="ble-btn">📡 Connect Bluetooth (BLE)</button>
       <button id="btnConnectSerial" class="primary">🔌 Connect USB Serial (COM)</button>
+      <button id="btnSyncRec" class="primary" style="background:#059669; color:#fff;" onclick="syncFlightRecorder()">💾 Sync SS2K Log (<span id="spanRecPts">0</span> pts)</button>
+      <button id="btnClearRec" style="background:#334155; color:#cbd5e1; font-size:0.75rem;" onclick="clearFlightRecorder()">Clear Flash Log</button>
       <button id="btnDisconnect" style="display:none;" class="danger">Disconnect</button>
     </div>
   </header>
@@ -612,8 +614,35 @@
     }
 
     // --- Parse Telemetry JSON ---
+    
+    // --- SS2K Onboard Flash Flight Recorder Sync Engine ---
+    let isDumpingRec = false;
+    let recDumpLines = [];
+
+    function syncFlightRecorder() {
+      if (!transport) {
+        log('Cannot sync: Not connected to SS2K!', 'error');
+        return;
+      }
+      recDumpLines = [];
+      isDumpingRec = true;
+      log('Requesting full workout dump from SS2K hardware flash memory...', 'warn');
+      sendCommand('REC_DUMP');
+    }
+
+    function clearFlightRecorder() {
+      if (confirm("Clear all recorded workout history from SS2K hardware flash?")) {
+        sendCommand('REC_CLEAR');
+        log('Sent REC_CLEAR to SS2K flash.', 'warn');
+      }
+    }
+
     function handleIncomingLine(line) {
       if (!line) return;
+      if (line.startsWith('REC_DATA:')) {
+        recDumpLines.push(line.substring(9));
+        return;
+      }
       if (!line.startsWith('{')) {
         log(line);
         return;
@@ -627,6 +656,40 @@
     }
 
     function updateUI(d) {
+      if (d.rec_dump === 'START') {
+        recDumpLines = [];
+        isDumpingRec = true;
+        log('Downloading workout data from SS2K flash storage...', 'warn');
+        return;
+      }
+      if (d.rec_dump === 'EMPTY') {
+        log('SS2K Flight Recorder is empty - no workout saved yet.', 'warn');
+        isDumpingRec = false;
+        return;
+      }
+      if (d.rec_dump === 'END') {
+        isDumpingRec = false;
+        if (recDumpLines.length > 0) {
+          const csvContent = recDumpLines.join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const nowStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          a.href = url;
+          a.download = `SS2K_Workout_${nowStr}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          log(`✅ Synced & downloaded ${recDumpLines.length} points from SS2K hardware flash!`, 'warn');
+        }
+        return;
+      }
+
+      if (d.pts !== undefined) {
+        const spanPts = document.getElementById('spanRecPts');
+        if (spanPts) spanPts.textContent = d.pts;
+      }
 
       // Update Pulse Count & Modes from Telemetry
       if (d.pls !== undefined && valLivePulses) {
@@ -981,7 +1044,7 @@
 
   <footer style="margin-top: 24px; padding: 12px 4px; text-align: center; font-size: 0.75rem; color: #94a3b8; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K CALIBRATION & DIAGNOSTICS</span>
-    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v4.3 • 2026-11-02 18:20</span>
+    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v4.4 • 2026-11-02 18:35</span>
   </footer>
 
 </body>
