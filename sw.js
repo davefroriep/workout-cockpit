@@ -1,11 +1,13 @@
-const CACHE_NAME = 'ss2k-cockpit-v5';
+const CACHE_NAME = 'ss2k-cockpit-v6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './tuner.html',
+  './silent.wav'
 ];
 
 // Install: Cache core assets immediately
