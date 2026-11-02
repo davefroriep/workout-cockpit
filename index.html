@@ -612,15 +612,36 @@
     // --- Parse SS2K Telemetry ---
     let rxBuffer = '';
     function parseSS2KTelemetry(chunk) {
+      if (!chunk) return;
+      const trimmed = chunk.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const d = JSON.parse(trimmed);
+          updateSS2KUI(d);
+          rxBuffer = '';
+          return;
+        } catch(e) {}
+      }
       rxBuffer += chunk;
       let lines = rxBuffer.split('\n');
-      rxBuffer = lines.pop();
-      for (let line of lines) {
-        line = line.trim();
-        if (line.startsWith('{') && line.endsWith('}')) {
+      if (lines.length > 1) {
+        rxBuffer = lines.pop();
+        for (let line of lines) {
+          line = line.trim();
+          if (line.startsWith('{') && line.endsWith('}')) {
+            try {
+              const d = JSON.parse(line);
+              updateSS2KUI(d);
+            } catch(e) {}
+          }
+        }
+      } else {
+        const bufTrim = rxBuffer.trim();
+        if (bufTrim.startsWith('{') && bufTrim.endsWith('}')) {
           try {
-            const d = JSON.parse(line);
+            const d = JSON.parse(bufTrim);
             updateSS2KUI(d);
+            rxBuffer = '';
           } catch(e) {}
         }
       }
