@@ -546,15 +546,32 @@
     let mainTicker = null;
     let totalKilojoules = 0;
 
-    // Keep screen awake (WakeLock API)
+    // Keep screen awake (Aggressive WakeLock & Visibility Re-acquire)
     let wakeLock = null;
     async function requestWakeLock() {
       try {
-        if ('wakeLock' in navigator) {
+        if ('wakeLock' in navigator && !wakeLock) {
           wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+          console.log('[WakeLock] Cockpit screen lock active');
         }
       } catch (err) {}
     }
+
+    // Auto re-acquire lock and reconnect BLE on screen wake / tab focus
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+        if (ss2kDevice && !ss2kDevice.gatt.connected) {
+          connectSS2KGatt(ss2kDevice);
+        }
+        if (polarDevice && !polarDevice.gatt.connected) {
+          connectPolarGatt(polarDevice);
+        }
+      }
+    });
+
+    document.addEventListener('pointerdown', requestWakeLock, { passive: true });
     requestWakeLock();
 
     // =========================================================================

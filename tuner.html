@@ -27,6 +27,7 @@
     h1 { font-size: 1.3rem; display: flex; align-items: center; gap: 10px; font-weight: 700; color: #fff; }
     .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 9999px; font-weight: 600; text-transform: uppercase; background: var(--card-border); color: var(--text-muted); }
     .badge.connected { background: rgba(34, 197, 94, 0.2); color: var(--success); border: 1px solid var(--success); }
+    .badge.warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); animation: pulse 1s infinite; }
 
     .conn-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     button { background: var(--card-border); color: var(--text); border: none; padding: 8px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
@@ -432,6 +433,71 @@
       }
     }
 
+    // --- Screen WakeLock & Aggressive Keep-Alive ---
+    let wakeLock = null;
+    let userDisconnected = false;
+
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+          console.log('[WakeLock] Screen lock acquired successfully');
+        }
+      } catch (err) {
+        console.warn('[WakeLock] Could not acquire lock:', err);
+      }
+    }
+
+    // Re-acquire WakeLock & auto-reconnect immediately when phone screen/tab wakes up
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+        if (bleDevice && !bleDevice.gatt.connected && !userDisconnected) {
+          log('Screen awake: auto-reconnecting Bluetooth...', 'warn');
+          reconnectBleGatt();
+        }
+      }
+    });
+
+    // Tap anywhere on the page keeps screen awake
+    document.addEventListener('pointerdown', requestWakeLock, { passive: true });
+
+    async function connectBleGatt(dev) {
+      log('Establishing GATT connection to ' + dev.name + '...');
+      dev.removeEventListener('gattserverdisconnected', onBleDisconnected);
+      dev.addEventListener('gattserverdisconnected', onBleDisconnected);
+
+      const server = await dev.gatt.connect();
+      const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+      bleTxChar = await service.getCharacteristic(NUS_TX_UUID);
+      bleRxChar = await service.getCharacteristic(NUS_RX_UUID);
+
+      await bleTxChar.startNotifications();
+      bleTxChar.addEventListener('characteristicvaluechanged', (e) => {
+        const value = new TextDecoder().decode(e.target.value);
+        handleIncomingLine(value.trim());
+      });
+
+      transport = 'ble';
+      userDisconnected = false;
+      updateConnState(true, 'Bluetooth (BLE)');
+      requestWakeLock();
+      log('Connected & Screen WakeLock active!', 'warn');
+    }
+
+    async function reconnectBleGatt() {
+      if (!bleDevice || bleDevice.gatt.connected || userDisconnected) return;
+      try {
+        badge.className = 'badge warning';
+        badge.textContent = 'Reconnecting...';
+        await connectBleGatt(bleDevice);
+      } catch (e) {
+        console.warn('[BLE] Reconnect retry in 2s...', e);
+        setTimeout(reconnectBleGatt, 2000);
+      }
+    }
+
     // --- Web Bluetooth Connection ---
     btnConnectBle.addEventListener('click', async () => {
       try {
@@ -439,38 +505,38 @@
           alert('Web Bluetooth is supported in Chrome, Edge, and Android over HTTPS or localhost.');
           return;
         }
+        userDisconnected = false;
+        requestWakeLock();
         log('Scanning for SS2K_Tuner Bluetooth device...');
         bleDevice = await navigator.bluetooth.requestDevice({
           filters: [{ name: 'SS2K_Tuner' }],
           optionalServices: [NUS_SERVICE_UUID]
         });
 
-        bleDevice.addEventListener('gattserverdisconnected', onBleDisconnected);
-        const server = await bleDevice.gatt.connect();
-        const service = await server.getPrimaryService(NUS_SERVICE_UUID);
-        bleTxChar = await service.getCharacteristic(NUS_TX_UUID);
-        bleRxChar = await service.getCharacteristic(NUS_RX_UUID);
-
-        await bleTxChar.startNotifications();
-        bleTxChar.addEventListener('characteristicvaluechanged', (e) => {
-          const value = new TextDecoder().decode(e.target.value);
-          handleIncomingLine(value.trim());
-        });
-
-        transport = 'ble';
-        updateConnState(true, 'Bluetooth (BLE)');
+        await connectBleGatt(bleDevice);
       } catch (err) {
         log('BLE connection failed: ' + err.message, 'error');
       }
     });
 
     function onBleDisconnected() {
-      log('Bluetooth device disconnected.', 'warn');
-      updateConnState(false);
+      log('Bluetooth connection lost.', 'warn');
+      if (!userDisconnected && bleDevice) {
+        badge.className = 'badge warning';
+        badge.textContent = 'Conn Lost - Reconnecting...';
+        setTimeout(reconnectBleGatt, 1500);
+      } else {
+        updateConnState(false);
+      }
     }
 
     // --- Disconnect Handler ---
     btnDisconnect.addEventListener('click', async () => {
+      userDisconnected = true;
+      if (wakeLock) {
+        try { wakeLock.release(); } catch(e) {}
+        wakeLock = null;
+      }
       if (transport === 'serial' && serialPort) {
         try {
           if (serialReader) await serialReader.cancel();
@@ -481,6 +547,7 @@
         bleDevice.gatt.disconnect();
       }
       updateConnState(false);
+      log('User disconnected.', 'warn');
     });
 
     function updateConnState(connected, label='') {
