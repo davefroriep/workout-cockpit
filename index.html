@@ -341,25 +341,19 @@
 <body>
 
   <!-- Top Header & Connectivity -->
-  <header>
+  <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-bottom: 10px;">
     <div class="brand">
       <span>SS2K</span> COCKPIT
     </div>
-    <div class="status-group">
-      <a href="tuner.html" class="conn-badge" style="text-decoration:none; color:var(--cyan); border-color:var(--cyan); padding:4px 10px; font-weight:700;">🔧 CALIBRATE</a>
-      <div id="btnFlightRec" class="conn-badge" onclick="woBadgeTap()" title="Workout stored on the SS2K - tap for status" style="cursor:pointer;">
-        <div class="conn-dot" style="background:#ef4444;"></div>
-        <span id="labelFlightRec">NO WORKOUT</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div onclick="openSettings()" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.72rem; font-family: monospace; padding: 5px 8px; background: rgba(30,41,59,0.7); border-radius: 6px; border: 1px solid var(--card-border);" title="Tap for Hardware & Connections">
+        <span id="hdrDotSS2K" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
+        <span style="font-weight:700; color:#fff;">BIKE</span>
+        <span style="opacity:0.3;">|</span>
+        <span id="hdrDotPolar" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
+        <span style="font-weight:700; color:#fff;">HR</span>
       </div>
-      <div id="btnConnectPolar" class="conn-badge" onclick="pairPolarH10()">
-        <div class="conn-dot"></div>
-        <span id="labelPolar">POLAR H10</span>
-      </div>
-      <div id="btnConnectSS2K" class="conn-badge" onclick="pairSS2K()">
-        <div class="conn-dot"></div>
-        <span id="labelSS2K">SS2K BIKE</span>
-      </div>
-      <div class="conn-badge" onclick="openSettings()" style="padding: 4px 8px;">⚙️</div>
+      <div class="conn-badge" onclick="openSettings()" style="padding: 5px 9px; font-size: 1.15rem; cursor: pointer; background: #1e293b; border-color: #334155; border-radius: 8px;" title="Hardware Connections & Settings">⚙️</div>
     </div>
   </header>
 
@@ -521,7 +515,42 @@
   <!-- Settings & Workout Config Modal -->
   <div id="settingsModal" class="modal">
     <div class="modal-box">
-      <div class="modal-title">⚙️ Cockpit Configuration</div>
+      <div class="modal-title">⚙️ Cockpit Settings & Hardware</div>
+
+      <!-- Hardware Connections & Flight Recorder -->
+      <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #334155;">
+        <div style="font-size: 0.82rem; font-weight: 800; text-transform: uppercase; color: var(--cyan); margin-bottom: 8px;">📡 Devices & Flight Recorder</div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+          <!-- SS2K Bike Connect -->
+          <div id="btnConnectSS2K" class="conn-badge" onclick="pairSS2K()" style="padding: 10px 8px; justify-content: center; cursor: pointer;">
+            <div class="conn-dot"></div>
+            <span id="labelSS2K" style="font-weight:700;">SS2K BIKE</span>
+          </div>
+          
+          <!-- Polar H10 Connect -->
+          <div id="btnConnectPolar" class="conn-badge" onclick="pairPolarH10()" style="padding: 10px 8px; justify-content: center; cursor: pointer;">
+            <div class="conn-dot"></div>
+            <span id="labelPolar" style="font-weight:700;">POLAR H10</span>
+          </div>
+        </div>
+
+        <!-- Hardware Flight Recorder Status & Action -->
+        <div id="btnFlightRec" class="conn-badge" onclick="woBadgeTap()" style="padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="conn-dot" style="background:#ef4444;"></div>
+            <span style="font-size: 0.8rem; font-weight: 600; color: var(--muted);">SS2K Flight Recorder:</span>
+          </div>
+          <span id="labelFlightRec" style="font-size: 0.8rem; font-weight: 800; color: #ef4444;">NO WORKOUT</span>
+        </div>
+
+        <!-- Calibrate & Diagnostics Link -->
+        <a href="tuner.html" style="display:block; text-align:center; padding:8px; background:#1e293b; border:1px solid var(--cyan); border-radius:8px; color:var(--cyan); font-size:0.85rem; font-weight:800; text-decoration:none;">
+          🔧 Motor Tuner & Pulley Ratio Calibration ↗
+        </a>
+      </div>
+
+      <div style="font-size: 0.82rem; font-weight: 800; text-transform: uppercase; color: var(--cyan); margin-bottom: 8px;">🎯 Targets & Calibration</div>
       <div class="form-row">
         <label>User Maximum Heart Rate (HRmax BPM):</label>
         <input type="number" id="cfgHRmax" value="180">
@@ -664,8 +693,24 @@
     // ---- SS2K link: never gives up, never duplicates handlers ----
     let ss2kConnecting = false, ss2kRetryTimer = null, ss2kDrops = 0, ss2kListenersFor = null, lastRxMs = 0;
     function setSS2KBadge(connected, text) {
-      document.getElementById('btnConnectSS2K').className = connected ? 'conn-badge connected' : 'conn-badge';
-      document.getElementById('labelSS2K').textContent = text;
+      const btn = document.getElementById('btnConnectSS2K');
+      if (btn) btn.className = connected ? 'conn-badge connected' : 'conn-badge';
+      const lbl = document.getElementById('labelSS2K');
+      if (lbl) lbl.textContent = text;
+
+      const dot = document.getElementById('hdrDotSS2K');
+      if (dot) {
+        if (connected) {
+          dot.style.background = '#22c55e';
+          dot.style.boxShadow = '0 0 6px #22c55e';
+        } else if (text && text.includes('RETRY')) {
+          dot.style.background = '#eab308';
+          dot.style.boxShadow = 'none';
+        } else {
+          dot.style.background = '#ef4444';
+          dot.style.boxShadow = 'none';
+        }
+      }
     }
     function onSS2KNotify(e) { parseSS2KTelemetry(new TextDecoder().decode(e.target.value)); }
     function onSS2KDisconnected() {
@@ -679,6 +724,7 @@
     }
     async function connectSS2KGatt(device) {
       if (!device || ss2kConnecting) return;
+      ss2kDevice = device;
       if (device.gatt.connected && ss2kRxChar) return;
       ss2kConnecting = true;
       try {
@@ -1167,32 +1213,50 @@
       }
     }
 
+    function setPolarBadge(connected, text) {
+      const btn = document.getElementById('btnConnectPolar');
+      if (btn) btn.className = connected ? 'conn-badge active-hr' : 'conn-badge';
+      const lbl = document.getElementById('labelPolar');
+      if (lbl) lbl.textContent = text;
+
+      const dot = document.getElementById('hdrDotPolar');
+      if (dot) {
+        if (connected) {
+          dot.style.background = '#22c55e';
+          dot.style.boxShadow = '0 0 6px #22c55e';
+        } else {
+          dot.style.background = '#ef4444';
+          dot.style.boxShadow = 'none';
+        }
+      }
+    }
+
     async function connectPolarGatt(device) {
+      if (!device) return;
+      polarDevice = device;
       device.addEventListener('gattserverdisconnected', () => {
-        document.getElementById('btnConnectPolar').className = 'conn-badge';
-        document.getElementById('labelPolar').textContent = 'POLAR H10';
+        setPolarBadge(false, 'POLAR H10');
         setTimeout(() => connectPolarGatt(device), 3000); // Auto-reconnect
       });
-      window.ss2kGattServer = await device.gatt.connect();
-      const server = window.ss2kGattServer;
-      const service = await server.getPrimaryService('heart_rate');
-      polarHrChar = await service.getCharacteristic('heart_rate_measurement');
+      try {
+        window.polarGattServer = await device.gatt.connect();
+        const server = window.polarGattServer;
+        const service = await server.getPrimaryService('heart_rate');
+        polarHrChar = await service.getCharacteristic('heart_rate_measurement');
 
-      await polarHrChar.startNotifications();
-      polarHrChar.addEventListener('characteristicvaluechanged', (e) => {
-        const val = e.target.value;
-        const flags = val.getUint8(0);
-        let bpm = 0;
-        if (flags & 0x01) {
-          bpm = val.getUint16(1, true); // 16-bit HR
-        } else {
-          bpm = val.getUint8(1); // 8-bit HR
-        }
-        updatePolarUI(bpm);
-      });
+        await polarHrChar.startNotifications();
+        polarHrChar.addEventListener('characteristicvaluechanged', (e) => {
+          const val = e.target.value;
+          const flags = val.getUint8(0);
+          let bpm = (flags & 0x01) ? val.getUint16(1, true) : val.getUint8(1);
+          updatePolarUI(bpm);
+        });
 
-      document.getElementById('btnConnectPolar').className = 'conn-badge active-hr';
-      document.getElementById('labelPolar').textContent = 'POLAR CONNECTED';
+        setPolarBadge(true, 'POLAR CONNECTED');
+      } catch (err) {
+        console.warn('Polar connect error:', err);
+        setPolarBadge(false, 'POLAR H10');
+      }
     }
 
     let lastHrSent = 0;
@@ -1235,21 +1299,62 @@
       }
     }
 
-    // --- Persistent Auto-Connect on Load ---
+    // --- Persistent Auto-Connect on Load & Touch ---
+    let isAutoConnecting = false;
     async function autoConnectPermittedDevices() {
-      if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+      if (!navigator.bluetooth || !navigator.bluetooth.getDevices || isAutoConnecting) return;
+      isAutoConnecting = true;
       try {
         const devices = await navigator.bluetooth.getDevices();
+        console.log(`[BLE] Found ${devices.length} permitted device(s)`);
         for (let dev of devices) {
-          if (dev.name && dev.name.startsWith('SS2K')) {
-            connectSS2KGatt(dev);
+          if (dev.name && (dev.name.startsWith('SS2K') || dev.name.includes('SmartSpin'))) {
+            ss2kDevice = dev;
+            if (!dev.gatt.connected && !ss2kConnecting) {
+              console.log('[BLE] Auto-connecting SS2K:', dev.name);
+              connectSS2KGatt(dev);
+            }
+            if (dev.watchAdvertisements) {
+              try {
+                await dev.watchAdvertisements();
+                dev.addEventListener('advertisementreceived', () => {
+                  if (!dev.gatt.connected && !ss2kConnecting) connectSS2KGatt(dev);
+                });
+              } catch (e) {}
+            }
           } else if (dev.name && (dev.name.includes('Polar') || dev.name.includes('H10'))) {
-            connectPolarGatt(dev);
+            polarDevice = dev;
+            if (!dev.gatt.connected) {
+              console.log('[BLE] Auto-connecting Polar H10:', dev.name);
+              connectPolarGatt(dev);
+            }
+            if (dev.watchAdvertisements) {
+              try {
+                await dev.watchAdvertisements();
+                dev.addEventListener('advertisementreceived', () => {
+                  if (!dev.gatt.connected) connectPolarGatt(dev);
+                });
+              } catch (e) {}
+            }
           }
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn('[BLE] getDevices error:', err);
+      } finally {
+        isAutoConnecting = false;
+      }
     }
+
+    // Auto-connect triggers
     window.addEventListener('DOMContentLoaded', autoConnectPermittedDevices);
+    window.addEventListener('load', autoConnectPermittedDevices);
+
+    // Chrome on Android can require a user touch gesture before GATT connect
+    window.addEventListener('pointerdown', () => {
+      if ((!ss2kDevice || !ss2kDevice.gatt.connected) || (!polarDevice || !polarDevice.gatt.connected)) {
+        autoConnectPermittedDevices();
+      }
+    }, { passive: true });
 
     // =========================================================================
     // WORKOUT PROTOCOLS (4x4, ZONE 2, ERG)
@@ -1482,7 +1587,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.4 • 2026-11-02 20:15</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.5 • 2026-11-02 20:20</span>
   </footer>
 
 </body>
