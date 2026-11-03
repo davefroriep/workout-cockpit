@@ -165,7 +165,7 @@
         <div>
           <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Flywheel Pulley Ratio</div>
           <div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">
-            <input type="number" id="inputRatio" min="0.5" max="10.0" step="0.05" value="1.00" style="width: 75px; padding: 4px 6px; font-size: 0.9rem; background: #0f172a; border: 1px solid var(--card-border); color: #fff; border-radius: 4px;">
+            <input type="number" id="inputRatio" min="0.5" max="10.0" step="0.05" value="4.50" style="width: 75px; padding: 4px 6px; font-size: 0.9rem; background: #0f172a; border: 1px solid var(--card-border); color: #fff; border-radius: 4px;">
             <button onclick="applyPulleyRatio()" style="padding: 4px 8px; font-size: 0.8rem; background: #059669;">Apply</button>
           </div>
         </div>
@@ -702,6 +702,9 @@
         chkRehabLock.checked = (d.rehab === 1);
         updateRehabVisuals(d.rehab === 1);
       }
+      if (d.ratio !== undefined && inputRatio && !inputRatio.matches(':focus')) {
+        inputRatio.value = parseFloat(d.ratio).toFixed(2);
+      }
       if (d.tgt_w !== undefined && labelTgtWatts) {
         activeTargetWatts = d.tgt_w;
         labelTgtWatts.textContent = d.tgt_w + ' W';
@@ -1045,7 +1048,7 @@
 
   <footer style="margin-top: 24px; padding: 12px 4px; text-align: center; font-size: 0.75rem; color: #94a3b8; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K CALIBRATION & DIAGNOSTICS</span>
-    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v5.2 • 2026-11-02 19:28</span>
+    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v5.3 • 2026-11-02 19:35</span>
   </footer>
 
 </body>

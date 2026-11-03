@@ -526,7 +526,7 @@
       </div>
       <div class="form-row">
         <label>Flywheel Pulley Ratio (Calibrated):</label>
-        <input type="number" step="0.01" id="cfgRatio" value="3.80">
+        <input type="number" step="0.01" id="cfgRatio" value="4.50">
       </div>
       <div style="margin: 14px 0 10px 0; padding-top: 10px; border-top: 1px solid #334155;">
         <div style="font-size: 0.85rem; font-weight: 800; color: var(--cyan); margin-bottom: 8px;">📊 Intervals.icu Sync</div>
@@ -561,7 +561,7 @@
     let target4x4Work = 230;
     let target4x4Rest = 110;
     let targetZ2 = 145;
-    let flywheelRatio = 3.80;
+    let flywheelRatio = 4.50;
 
     let activeMode = '4x4'; // '4x4', 'z2', 'erg', 'gears'
     let currentTargetWatts = 145;
@@ -1042,6 +1042,34 @@
     function updateSS2KUI(d) {
       handleWoTelemetry(d);
 
+      if (d.ratio !== undefined && d.ratio > 0) {
+        flywheelRatio = d.ratio;
+        const c = document.getElementById('cfgRatio');
+        if (c && !c.matches(':focus')) c.value = d.ratio.toFixed(2);
+      }
+
+      if (d.rehab !== undefined) {
+        const isLocked = (d.rehab === 1);
+        if (rehabLocked !== isLocked) {
+          rehabLocked = isLocked;
+          const bar = document.getElementById('rehabBar');
+          if (bar) {
+            bar.className = isLocked ? '' : 'unlocked';
+            bar.innerHTML = isLocked
+              ? `<div><b style="color:#10b981;">🛡️ REHAB LOCK ACTIVE:</b> Level 1 Free-Spin Floor</div>
+                 <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                   <span style="font-size:0.75rem; color:#94a3b8;">LOCK:</span>
+                   <input type="checkbox" id="chkRehab" checked onchange="toggleRehab(this.checked)" style="accent-color:#10b981; width:18px; height:18px;">
+                 </label>`
+              : `<div><b style="color:#eab308;">⚠️ REHAB LOCK DISABLED:</b> Full Resistance Active (Levels 1-100)</div>
+                 <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                   <span style="font-size:0.75rem; color:#94a3b8;">LOCK:</span>
+                   <input type="checkbox" id="chkRehab" onchange="toggleRehab(this.checked)" style="accent-color:#eab308; width:18px; height:18px;">
+                 </label>`;
+          }
+        }
+      }
+
       // Live Cadence
       liveCadence = d.cad;
       document.getElementById('valCadence').textContent = d.cad.toFixed(0);
@@ -1356,7 +1384,7 @@
       target4x4Work = parseInt(document.getElementById('cfg4x4Work').value) || 230;
       target4x4Rest = parseInt(document.getElementById('cfg4x4Rest').value) || 110;
       targetZ2 = parseInt(document.getElementById('cfgZ2Watts').value) || 145;
-      flywheelRatio = parseFloat(document.getElementById('cfgRatio').value) || 3.80;
+      flywheelRatio = parseFloat(document.getElementById('cfgRatio').value) || 4.50;
       
       const ath = document.getElementById('cfgIntervalsAthlete').value.trim() || 'i758105';
       const key = document.getElementById('cfgIntervalsApiKey').value.trim() || '4d5rn0dcv82roimz7sm6g84g9';
@@ -1387,7 +1415,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.2 • 2026-11-02 19:28</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.3 • 2026-11-02 19:35</span>
   </footer>
 
 </body>
