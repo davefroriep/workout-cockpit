@@ -1536,7 +1536,6 @@
         if (tgt) { tgt.textContent = `MANUAL GEARS (1-100)`; tgt.style.color = 'var(--muted)'; }
       }
     }
-    }
 
     // Modal Handlers
     function openSettings() {
@@ -1591,7 +1590,7 @@
       // When a new Service Worker takes control, silently reload if idle so latest build is live
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing && !workoutTimerInterval) {
+        if (!refreshing && !workoutRunning) {
           refreshing = true;
           window.location.reload();
         }
@@ -1604,7 +1603,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.6 • 2026-11-02 20:30</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.7 • 2026-11-02 21:15</span>
   </footer>
 
 </body>
