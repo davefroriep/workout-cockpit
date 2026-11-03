@@ -346,9 +346,9 @@
       <span>SS2K</span> COCKPIT
     </div>
     <div class="status-group">
-      <div id="btnFlightRec" class="conn-badge" onclick="syncFlightRecorder()" title="SS2K Onboard Flight Recorder: Tap to Sync/Download CSV" style="cursor:pointer;">
+      <div id="btnFlightRec" class="conn-badge" onclick="woBadgeTap()" title="Workout stored on the SS2K - tap for status" style="cursor:pointer;">
         <div class="conn-dot" style="background:#ef4444;"></div>
-        <span id="labelFlightRec">REC: 0s</span>
+        <span id="labelFlightRec">NO WORKOUT</span>
       </div>
       <div id="btnConnectPolar" class="conn-badge" onclick="pairPolarH10()">
         <div class="conn-dot"></div>
@@ -485,6 +485,24 @@
     </button>
   </div>
 
+  <!-- Workout chart + Finish / Discard -->
+  <div style="margin:8px 0 4px 0;">
+    <canvas id="woChart" height="64" style="width:100%; height:64px; background:#0b1220; border:1px solid #1e293b; border-radius:10px;"></canvas>
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <button class="btn-action" style="flex:1; padding:10px; background:rgba(34,197,94,0.15); border-color:#22c55e; color:#22c55e;" onclick="finishWorkoutUI()">⏹ FINISH &amp; SAVE</button>
+      <button class="btn-action" style="flex:0 0 38%; padding:10px; background:rgba(239,68,68,0.12); border-color:#ef4444; color:#ef4444;" onclick="discardWorkoutUI()">🗑 DISCARD</button>
+    </div>
+  </div>
+
+  <!-- Workout-on-device modal (resume / finish / discard) -->
+  <div id="woModal" class="modal">
+    <div class="modal-box">
+      <div class="modal-title" id="woModalTitle">Workout on SS2K</div>
+      <div id="woModalBody" style="font-size:0.95rem; line-height:1.5; color:#cbd5e1;"></div>
+      <div class="modal-btns" id="woModalBtns"></div>
+    </div>
+  </div>
+
   <!-- Settings & Workout Config Modal -->
   <div id="settingsModal" class="modal">
     <div class="modal-box">
@@ -508,13 +526,6 @@
       <div class="form-row">
         <label>Flywheel Pulley Ratio (Calibrated):</label>
         <input type="number" step="0.01" id="cfgRatio" value="3.80">
-      </div>
-      <div class="form-row" style="margin-top: 14px; border-top: 1px solid #334155; padding-top: 12px;">
-        <label>SS2K Onboard Flight Recorder (ESP32 Flash):</label>
-        <div style="display: flex; gap: 8px; margin-top: 6px;">
-          <button type="button" style="background:#059669; color:#fff; font-size:0.8rem; padding:8px;" onclick="syncFlightRecorder()">📥 Download Workout CSV</button>
-          <button type="button" style="background:#dc2626; color:#fff; font-size:0.8rem; padding:8px;" onclick="clearFlightRecorder()">🗑️ Clear Flash</button>
-        </div>
       </div>
       <div class="modal-btns">
         <button style="background:#334155; color:#fff;" onclick="closeSettings()">Cancel</button>
@@ -606,155 +617,267 @@
       }
     }
 
-    async function connectSS2KGatt(device) {
-      device.addEventListener('gattserverdisconnected', () => {
-        document.getElementById('btnConnectSS2K').className = 'conn-badge';
-        document.getElementById('labelSS2K').textContent = 'SS2K (DISCONNECTED)';
-        setTimeout(() => connectSS2KGatt(device), 2500); // Auto-reconnect
-      });
-      window.ss2kGattServer = await device.gatt.connect();
-      const server = window.ss2kGattServer;
-      window.ss2kService = await server.getPrimaryService(SS2K_SERVICE_UUID);
-      const service = window.ss2kService;
-      ss2kTxChar = await service.getCharacteristic(SS2K_TX_UUID);
-      ss2kRxChar = await service.getCharacteristic(SS2K_RX_UUID);
-
-      await ss2kTxChar.startNotifications();
-      ss2kTxChar.addEventListener('characteristicvaluechanged', (e) => {
-        const text = new TextDecoder().decode(e.target.value);
-        parseSS2KTelemetry(text);
-      });
-
-      document.getElementById('btnConnectSS2K').className = 'conn-badge connected';
-      document.getElementById('labelSS2K').textContent = 'SS2K CONNECTED';
-      
-      // Initialize settings to SS2K
-      sendSS2KCmd(`SET_RATIO:${flywheelRatio.toFixed(3)}`);
-      sendSS2KCmd(`SET_REHAB:${rehabLocked ? 1 : 0}`);
-      sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
+    // ---- Keep-alive: silent audio loop keeps Chrome/Android from throttling the page ----
+    let keepAliveAudio = null;
+    function startKeepAlive() {
+      try {
+        if (!keepAliveAudio) { keepAliveAudio = new Audio('silent.wav'); keepAliveAudio.loop = true; keepAliveAudio.volume = 0.01; }
+        keepAliveAudio.play().catch(() => {});
+        if ('mediaSession' in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: 'SS2K Workout', artist: 'Cockpit' });
+      } catch (e) {}
     }
+
+    // ---- SS2K link: never gives up, never duplicates handlers ----
+    let ss2kConnecting = false, ss2kRetryTimer = null, ss2kDrops = 0, ss2kListenersFor = null, lastRxMs = 0;
+    function setSS2KBadge(connected, text) {
+      document.getElementById('btnConnectSS2K').className = connected ? 'conn-badge connected' : 'conn-badge';
+      document.getElementById('labelSS2K').textContent = text;
+    }
+    function onSS2KNotify(e) { parseSS2KTelemetry(new TextDecoder().decode(e.target.value)); }
+    function onSS2KDisconnected() {
+      ss2kDrops++;
+      setSS2KBadge(false, `SS2K RECONNECTING (${ss2kDrops} drops)`);
+      scheduleSS2KReconnect(250);
+    }
+    function scheduleSS2KReconnect(ms) {
+      clearTimeout(ss2kRetryTimer);
+      ss2kRetryTimer = setTimeout(() => connectSS2KGatt(ss2kDevice), ms);
+    }
+    async function connectSS2KGatt(device) {
+      if (!device || ss2kConnecting) return;
+      if (device.gatt.connected && ss2kRxChar) return;
+      ss2kConnecting = true;
+      try {
+        if (ss2kListenersFor !== device) {
+          device.addEventListener('gattserverdisconnected', onSS2KDisconnected);
+          ss2kListenersFor = device;
+        }
+        window.ss2kGattServer = await device.gatt.connect();
+        window.ss2kService = await window.ss2kGattServer.getPrimaryService(SS2K_SERVICE_UUID);
+        if (ss2kTxChar) { try { ss2kTxChar.removeEventListener('characteristicvaluechanged', onSS2KNotify); } catch (e) {} }
+        ss2kTxChar = await window.ss2kService.getCharacteristic(SS2K_TX_UUID);
+        ss2kRxChar = await window.ss2kService.getCharacteristic(SS2K_RX_UUID);
+        ss2kTxChar.addEventListener('characteristicvaluechanged', onSS2KNotify);
+        await ss2kTxChar.startNotifications();
+        rxBuffer = '';
+        lastRxMs = Date.now();
+        setSS2KBadge(true, ss2kDrops ? `SS2K CONNECTED (${ss2kDrops} drops)` : 'SS2K CONNECTED');
+        if (rehabLocked) sendSS2KCmd('SET_REHAB:1');   // only ever push the SAFE state
+        sendSS2KCmd('WO_SYNC');                         // pull the workout the device is holding
+      } catch (e) {
+        console.warn('SS2K connect failed, retrying', e);
+        setSS2KBadge(false, `SS2K RETRYING (${ss2kDrops} drops)`);
+        scheduleSS2KReconnect(1200);
+      } finally {
+        ss2kConnecting = false;
+      }
+    }
+    // Watchdog: link "connected" but silent for >3 s => force a clean reconnect
+    setInterval(() => {
+      if (ss2kDevice && ss2kDevice.gatt.connected && lastRxMs && Date.now() - lastRxMs > 3000) {
+        lastRxMs = Date.now();
+        try { ss2kDevice.gatt.disconnect(); } catch (e) {}
+      } else if (ss2kDevice && !ss2kDevice.gatt.connected && !ss2kConnecting) {
+        scheduleSS2KReconnect(100);
+      }
+    }, 1500);
 
     function sendSS2KCmd(cmd) {
       if (ss2kRxChar && ss2kDevice && ss2kDevice.gatt.connected) {
-        ss2kRxChar.writeValue(new TextEncoder().encode(cmd + '\n'));
+        ss2kRxChar.writeValueWithoutResponse
+          ? ss2kRxChar.writeValueWithoutResponse(new TextEncoder().encode(cmd + '\n')).catch(() => ss2kRxChar.writeValue(new TextEncoder().encode(cmd + '\n')).catch(() => {}))
+          : ss2kRxChar.writeValue(new TextEncoder().encode(cmd + '\n')).catch(() => {});
+        return true;
       }
+      return false;
     }
 
-    // --- Parse SS2K Telemetry ---
-    
-    // --- SS2K Onboard Flash Flight Recorder Sync Engine ---
-    let isDumpingRec = false;
-    let recDumpLines = [];
-
-    function syncFlightRecorder() {
-      if (!ss2kRxChar || !ss2kDevice || !ss2kDevice.gatt.connected) {
-        alert("Please connect to SS2K via Bluetooth first!");
-        return;
-      }
-      recDumpLines = [];
-      isDumpingRec = true;
-      const lbl = document.getElementById('labelFlightRec');
-      if (lbl) lbl.textContent = 'SYNCING...';
-      sendSS2KCmd('REC_DUMP');
-    }
-
-    function clearFlightRecorder() {
-      if (confirm("Clear all recorded workout history from SS2K hardware flash?")) {
-        sendSS2KCmd('REC_CLEAR');
-        alert("SS2K workout memory cleared.");
-      }
-    }
-
+    // ---- Line-based parser (BLE chunks -> complete lines) ----
     let rxBuffer = '';
     function parseSS2KTelemetry(chunk) {
       if (!chunk) return;
-      if (chunk.includes('REC_DATA:')) {
-        const parts = chunk.split('\n');
-        for (const p of parts) {
-          const pt = p.trim();
-          if (pt.startsWith('REC_DATA:')) {
-            recDumpLines.push(pt.substring(9));
-          }
-        }
-      }
-      const trimmed = chunk.trim();
-      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-        try {
-          const d = JSON.parse(trimmed);
-          updateSS2KUI(d);
-          rxBuffer = '';
-          return;
-        } catch(e) {}
-      }
+      lastRxMs = Date.now();
       rxBuffer += chunk;
-      let lines = rxBuffer.split('\n');
-      if (lines.length > 1) {
-        rxBuffer = lines.pop();
-        for (let line of lines) {
-          line = line.trim();
-          if (line.startsWith('{') && line.endsWith('}')) {
-            try {
-              const d = JSON.parse(line);
-              updateSS2KUI(d);
-            } catch(e) {}
-          }
-        }
-      } else {
-        const bufTrim = rxBuffer.trim();
-        if (bufTrim.startsWith('{') && bufTrim.endsWith('}')) {
-          try {
-            const d = JSON.parse(bufTrim);
-            updateSS2KUI(d);
-            rxBuffer = '';
-          } catch(e) {}
-        }
+      let i;
+      while ((i = rxBuffer.indexOf('\n')) >= 0) {
+        const line = rxBuffer.slice(0, i).trim();
+        rxBuffer = rxBuffer.slice(i + 1);
+        if (line) handleSS2KLine(line);
+      }
+      if (rxBuffer.length > 3000) rxBuffer = '';
+    }
+    function handleSS2KLine(line) {
+      if (line[0] === '{') {
+        let d; try { d = JSON.parse(line); } catch (e) { return; }
+        if (d.snap) onWoSnap(d);
+        else if (d.hist) onWoHistEnd(d);
+        else updateSS2KUI(d);
+      } else if (line.startsWith('H:')) {
+        onWoHist(line.slice(2));
       }
     }
 
+    // =========================================================================
+    // DEVICE-RESIDENT WORKOUT (SS2K owns it; this page is just a window)
+    // =========================================================================
+    let wo = { st: 0, s: 0, p: 0, kj: 0, mw: 0, rev: 0, auto: 0, id: 0, ep: 0, n: 0 };
+    let woPoints = new Map();          // sec -> {w,cad,hr,lvl,p}
+    let woPendingSave = false, woShownModalFor = 0, woFirstApply = true, woLastLeft = -1, woLastChartSec = -1;
+
+    function fmtHMS(sec) {
+      const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+      return (h ? h + ':' : '') + String(m).padStart(h ? 2 : 1, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function onWoSnap(d) {
+      wo.st = d.st; wo.s = d.s; wo.p = d.p; wo.kj = d.kj; wo.mw = d.mw; wo.auto = d.auto; wo.id = d.id; wo.ep = d.ep; wo.n = d.n;
+      if (d.ratio) { flywheelRatio = d.ratio; const c = document.getElementById('cfgRatio'); if (c) c.value = d.ratio.toFixed(2); wo.rev = d.p / d.ratio; }
+      woPoints = new Map();
+      applyWoUI();
+      if (d.st === 2 && !woPendingSave && woShownModalFor !== d.id) { woShownModalFor = d.id; showWoModal(); }
+      drawWoChart();
+    }
+    function onWoHist(s) {
+      const a = s.split(',').map(Number);   // idx, pulses, cad10, watts, lvl, hr
+      woPoints.set(a[0], { p: a[1], cad: a[2] / 10, w: a[3], lvl: a[4], hr: a[5] });
+      if (woPoints.size % 20 === 0) drawWoChart();
+    }
+    function onWoHistEnd(d) {
+      drawWoChart();
+      if (woPendingSave) completeSave();
+    }
+
+    function handleWoTelemetry(d) {
+      if (d.wo === undefined) return;
+      wo.st = d.wo; wo.s = d.ws; wo.p = d.wp; wo.rev = d.rev; wo.kj = d.wk; wo.mw = d.mw; wo.auto = d.auto;
+      applyWoUI();
+      if (wo.st === 1 && wo.s !== woLastChartSec) {
+        woLastChartSec = wo.s;
+        woPoints.set(wo.s - 1 < 0 ? 0 : wo.s - 1, { p: wo.p, cad: d.cad, w: Math.round(liveWatts), lvl: Math.round(currentC7Level), hr: liveHR });
+        if (wo.s % 3 === 0) drawWoChart();
+      }
+    }
+
+    function applyWoUI() {
+      workoutRunning = (wo.st === 1);
+      const lbl = document.getElementById('labelPlay'), sub = document.getElementById('subPlay'), btn = document.getElementById('btnMainAction');
+      const badge = document.getElementById('btnFlightRec'), bl = document.getElementById('labelFlightRec');
+      if (wo.st === 0) {
+        lbl.textContent = 'START'; sub.textContent = 'Session'; btn.className = 'btn-action play';
+        badge.className = 'conn-badge'; bl.textContent = 'NO WORKOUT';
+      } else if (wo.st === 1) {
+        lbl.textContent = 'PAUSE'; sub.textContent = 'Running'; btn.className = 'btn-action plus';
+        badge.className = 'conn-badge active-hr'; bl.textContent = 'REC ' + fmtHMS(wo.s);
+      } else {
+        lbl.textContent = 'RESUME'; sub.textContent = wo.auto ? 'Auto-paused' : 'Paused'; btn.className = 'btn-action play';
+        badge.className = 'conn-badge connected'; bl.textContent = 'PAUSED ' + fmtHMS(wo.s);
+      }
+      document.getElementById('valTotalTime').textContent = fmtHMS(wo.s);
+      document.getElementById('valEnergy').textContent = `${Math.round(wo.kj)} kJ • ${wo.rev.toFixed(0)} revs`;
+      totalWorkoutSeconds = wo.s;
+      if (wo.st !== 0) applyElapsed(wo.s);
+    }
+
+    // Interval plan position is derived from the DEVICE's elapsed seconds, so reconnects never desync it
+    function applyElapsed(ws) {
+      if (activeMode !== '4x4' && activeMode !== 'z2') return;
+      let acc = 0, idx = workoutIntervals.length;
+      for (let i = 0; i < workoutIntervals.length; i++) {
+        if (ws < acc + workoutIntervals[i].duration) { idx = i; break; }
+        acc += workoutIntervals[i].duration;
+      }
+      if (idx >= workoutIntervals.length) {
+        document.getElementById('intPhase').textContent = 'PLAN COMPLETE';
+        document.getElementById('intTimer').textContent = '00:00';
+        return;
+      }
+      if (idx !== currentIntervalIndex) {
+        const first = woFirstApply; woFirstApply = false;
+        loadInterval(idx);
+        if (!first) playBeep(1320, 0.4);
+      }
+      woFirstApply = false;
+      const left = acc + workoutIntervals[idx].duration - ws;
+      intervalSecondsLeft = left;
+      document.getElementById('intTimer').textContent = formatTime(left);
+      if (left !== woLastLeft) { woLastLeft = left; if (left <= 3 && left > 0 && wo.st === 1) playBeep(880, 0.1); }
+    }
+
+    function showWoModal(msg) {
+      const when = wo.ep ? new Date(wo.ep * 1000).toLocaleString() : '';
+      document.getElementById('woModalTitle').textContent = msg ? msg : 'Workout paused on your SS2K';
+      document.getElementById('woModalBody').innerHTML = msg ? '' :
+        `<b>${fmtHMS(wo.s)}</b> &bull; ${wo.rev.toFixed(0)} revs &bull; ${Math.round(wo.kj)} kJ &bull; max ${wo.mw} W` +
+        (when ? `<br><span style="color:#64748b">started ${when}</span>` : '');
+      document.getElementById('woModalBtns').innerHTML =
+        `<button style="background:#22c55e;color:#022c22;" onclick="closeWoModal();toggleWorkout()">Resume</button>` +
+        `<button style="background:#38bdf8;color:#022c22;" onclick="closeWoModal();finishWorkoutUI()">Finish &amp; Save</button>` +
+        `<button style="background:#ef4444;color:#fff;" onclick="closeWoModal();discardWorkoutUI()">Discard</button>`;
+      document.getElementById('woModal').classList.add('active');
+    }
+    function closeWoModal() { document.getElementById('woModal').classList.remove('active'); }
+    function woBadgeTap() { if (wo.st === 2) showWoModal(); else if (wo.st === 0 && !(ss2kDevice && ss2kDevice.gatt.connected)) pairSS2K(); }
+
+    function toggleWorkout() {
+      startKeepAlive();
+      let ok = true;
+      if (wo.st === 0) ok = sendSS2KCmd('WO_START:' + Math.floor(Date.now() / 1000));
+      else if (wo.st === 1) ok = sendSS2KCmd('WO_PAUSE');
+      else ok = sendSS2KCmd('WO_RESUME');
+      if (!ok) alert('SS2K not connected yet - reconnecting. Try again in a second.');
+    }
+    function finishWorkoutUI() {
+      if (wo.st === 0) return;
+      if (wo.st === 1) sendSS2KCmd('WO_PAUSE');
+      woPendingSave = true;
+      woPoints = new Map();
+      showWoModal('Saving workout from SS2K...');
+      sendSS2KCmd('WO_SYNC:F');   // full-resolution history
+    }
+    function completeSave() {
+      woPendingSave = false;
+      const points = [...woPoints.entries()].sort((a, b) => a[0] - b[0]).map(([i, v]) => ({ t: i, ...v }));
+      const rec = { id: wo.id, startEpoch: wo.ep, seconds: wo.s, pulses: wo.p, revs: wo.rev, kj: wo.kj, maxW: wo.mw, ratio: flywheelRatio, points };
+      let saved = false;
+      try {
+        const all = JSON.parse(localStorage.getItem('ss2k_workouts') || '[]');
+        all.push(rec);
+        while (all.length > 15) all.shift();
+        localStorage.setItem('ss2k_workouts', JSON.stringify(all));
+        saved = true;
+      } catch (e) {}
+      if (saved && points.length >= Math.min(wo.s, 5)) {
+        sendSS2KCmd('WO_DISCARD');   // device copy is cleared ONLY after the phone confirmed it has the data
+        document.getElementById('woModalTitle').textContent = '✅ Workout saved';
+        document.getElementById('woModalBody').innerHTML = `<b>${fmtHMS(rec.seconds)}</b> &bull; ${rec.revs.toFixed(0)} revs &bull; ${Math.round(rec.kj)} kJ &bull; max ${rec.maxW} W<br>${points.length} data points`;
+      } else {
+        document.getElementById('woModalTitle').textContent = '⚠️ Save incomplete - workout kept on SS2K';
+        document.getElementById('woModalBody').innerHTML = 'Nothing was deleted. Reconnect and try Finish again.';
+      }
+      document.getElementById('woModalBtns').innerHTML = `<button style="background:#334155;color:#fff;" onclick="closeWoModal()">OK</button>`;
+    }
+    function discardWorkoutUI() {
+      if (wo.st === 0) return;
+      if (confirm('Discard this workout permanently from the SS2K?')) { sendSS2KCmd('WO_DISCARD'); woPoints = new Map(); drawWoChart(); }
+    }
+    function finishWorkout() {}   // plan-complete hook (the workout itself keeps running until you finish it)
+
+    function drawWoChart() {
+      const c = document.getElementById('woChart'); if (!c) return;
+      const w = c.clientWidth || 300, h = c.clientHeight || 64;
+      if (c.width !== w) c.width = w; c.height = h;
+      const g = c.getContext('2d'); g.clearRect(0, 0, w, h);
+      const pts = [...woPoints.entries()].sort((a, b) => a[0] - b[0]);
+      if (pts.length < 2) return;
+      const maxT = pts[pts.length - 1][0] || 1;
+      const maxW = Math.max(100, ...pts.map(p => p[1].w));
+      g.strokeStyle = '#38bdf8'; g.lineWidth = 1.5; g.beginPath();
+      pts.forEach(([t, v], i) => { const x = (t / maxT) * (w - 2) + 1, y = h - 3 - (v.w / maxW) * (h - 8); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+      g.stroke();
+    }
+
     function updateSS2KUI(d) {
-      if (d.rec_dump === 'START') {
-        recDumpLines = [];
-        isDumpingRec = true;
-        return;
-      }
-      if (d.rec_dump === 'EMPTY') {
-        alert("SS2K Flight Recorder is empty - no workout saved yet.");
-        isDumpingRec = false;
-        const lbl = document.getElementById('labelFlightRec');
-        if (lbl) lbl.textContent = 'REC: 0s';
-        return;
-      }
-      if (d.rec_dump === 'END') {
-        isDumpingRec = false;
-        if (recDumpLines.length > 0) {
-          const csvContent = recDumpLines.join('\n');
-          const blob = new Blob([csvContent], { type: 'text/csv' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          const nowStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-          a.href = url;
-          a.download = `SS2K_Workout_${nowStr}.csv`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          alert(`✅ Synced & downloaded ${recDumpLines.length} points from SS2K hardware flash!`);
-        }
-        return;
-      }
-      if (d.rec !== undefined) {
-        const bRec = document.getElementById('btnFlightRec');
-        const lRec = document.getElementById('labelFlightRec');
-        if (bRec && lRec && !isDumpingRec) {
-          if (d.rec === 1) {
-            bRec.className = 'conn-badge active-hr';
-            lRec.textContent = `REC: ${d.pts || 0}s`;
-          } else {
-            bRec.className = 'conn-badge';
-            lRec.textContent = `REC: ${d.pts || 0}s`;
-          }
-        }
-      }
+      handleWoTelemetry(d);
 
       // Live Cadence
       liveCadence = d.cad;
@@ -857,8 +980,10 @@
       document.getElementById('labelPolar').textContent = 'POLAR CONNECTED';
     }
 
+    let lastHrSent = 0;
     function updatePolarUI(bpm) {
       liveHR = bpm;
+      if (Date.now() - lastHrSent > 1000) { lastHrSent = Date.now(); sendSS2KCmd("HR:" + bpm); }
       document.getElementById('valHR').textContent = bpm;
       const pctMax = Math.round((bpm / userHRmax) * 100);
 
@@ -1004,48 +1129,6 @@
       });
     }
 
-    function toggleWorkout() {
-      workoutRunning = !workoutRunning;
-      const btn = document.getElementById('btnMainAction');
-      const lbl = document.getElementById('labelPlay');
-      const sub = document.getElementById('subPlay');
-
-      if (workoutRunning) {
-        lbl.textContent = 'PAUSE';
-        sub.textContent = 'Running';
-        btn.className = 'btn-action plus';
-        mainTicker = setInterval(onSecondTick, 1000);
-      } else {
-        lbl.textContent = 'RESUME';
-        sub.textContent = 'Paused';
-        btn.className = 'btn-action play';
-        clearInterval(mainTicker);
-      }
-    }
-
-    function onSecondTick() {
-      totalWorkoutSeconds++;
-      document.getElementById('valTotalTime').textContent = formatTime(totalWorkoutSeconds);
-
-      // Energy calculation: Watts * seconds / 1000 = kJ
-      totalKilojoules += (liveWatts / 1000.0);
-      const kcal = totalKilojoules * 0.239;
-      document.getElementById('valEnergy').textContent = `${Math.round(totalKilojoules)} kJ (${Math.round(kcal)} kcal)`;
-
-      if (activeMode === '4x4' || activeMode === 'z2') {
-        intervalSecondsLeft--;
-        document.getElementById('intTimer').textContent = formatTime(intervalSecondsLeft);
-
-        // 3-second audio countdown alert
-        if (intervalSecondsLeft <= 3 && intervalSecondsLeft > 0) {
-          playBeep(880, 0.1);
-        } else if (intervalSecondsLeft === 0) {
-          playBeep(1320, 0.4);
-          loadInterval(currentIntervalIndex + 1);
-        }
-      }
-    }
-
     function formatTime(sec) {
       const m = Math.floor(sec / 60).toString().padStart(2, '0');
       const s = (sec % 60).toString().padStart(2, '0');
@@ -1121,7 +1204,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v4.4 • 2026-11-02 18:35</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.0 • 2026-11-02 18:56</span>
   </footer>
 
 </body>
