@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SS2K Interactive Live Tuner & Telemetry Dashboard</title>
+  <script>try{if(localStorage.getItem('ss2k_black')!=='false')document.documentElement.classList.add('black');}catch(e){}</script>
   <style>
     :root {
       --bg: #0f172a;
@@ -87,6 +88,14 @@
     .log-line { margin-bottom: 2px; white-space: pre-wrap; }
     .log-line.warn { color: var(--warning); }
     .log-line.error { color: var(--danger); }
+
+    /* ---- Black mode (shared setting with the cockpit) ---- */
+    html.black { --bg:#000; --card-bg:#000; --card-border:#4b5563; --text:#fff; --text-muted:#e5e7eb; }
+    html.black body, html.black .card, html.black header, html.black input, html.black select, html.black textarea { background:#000 !important; }
+    html.black, html.black body, html.black * { color:#fff !important; }
+    html.black [style*="#0f172a"], html.black [style*="#1e293b"], html.black [style*="#070a13"],
+    html.black [style*="#0b1220"], html.black [style*="#334155"] { background:#000 !important; border:1px solid #6b7280 !important; }
+    html.black .card, html.black input, html.black select { border-color:#6b7280 !important; }
   </style>
 </head>
 <body>
@@ -1032,7 +1041,7 @@
 
   <footer style="margin-top: 24px; padding: 12px 4px; text-align: center; font-size: 0.75rem; color: #94a3b8; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K CALIBRATION & DIAGNOSTICS</span>
-    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v6.4 • 2026-11-03 10:45</span>
+    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v6.5 • 2026-11-03 11:00</span>
   </footer>
 
 </body>

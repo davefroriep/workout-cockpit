@@ -15,6 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="SS2K Cockpit">
   <meta name="theme-color" content="#070a13">
 
+  <script>try{if(localStorage.getItem('ss2k_black')!=='false')document.documentElement.classList.add('black');}catch(e){}</script>
   <style>
     :root {
       --bg: #070a13;
@@ -347,6 +348,19 @@
     }
     .modal-btns { display: flex; gap: 8px; margin-top: 16px; }
     .modal-btns button { flex: 1; padding: 12px; border-radius: 8px; font-weight: 800; cursor: pointer; }
+
+    /* ---- Black mode: pure black background, all text white (toggle in Settings) ---- */
+    html.black { --bg:#000; --card-bg:#000; --card-border:#4b5563; --text:#fff; --muted:#e5e7eb; }
+    html.black body, html.black header, html.black .metric-card, html.black .modal-box, html.black #intervalCard,
+    html.black .tab-btn, html.black .form-row input, html.black #btHint, html.black #toast,
+    html.black .conn-badge:not(.connected):not(.active-hr) { background:#000 !important; }
+    html.black, html.black body, html.black * { color:#fff !important; }
+    html.black [style*="#0f172a"], html.black [style*="#1e293b"], html.black [style*="#070a13"],
+    html.black [style*="#0b1220"], html.black [style*="#334155"] { background:#000 !important; border:1px solid #6b7280 !important; }
+    html.black .metric-card, html.black .modal-box, html.black #intervalCard, html.black .tab-btn,
+    html.black .form-row input, html.black header { border-color:#6b7280 !important; }
+    html.black .tab-btn.active { border-color:#fff !important; font-weight:900; }
+    html.black footer { border-top-color:#4b5563 !important; }
   </style>
 </head>
 <body>
@@ -550,6 +564,14 @@
         <input type="checkbox" id="cfgIntervalsAuto" checked style="width:20px; height:20px; cursor:pointer; accent-color:var(--cyan);">
       </div>
       <div onclick="openBtModal()" style="text-align:center; padding:8px; margin-bottom:6px; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#94a3b8; font-size:0.8rem; font-weight:700; cursor:pointer;">📡 Bluetooth &amp; Flight Recorder Details</div>
+      <div class="form-row" style="display:flex; align-items:center; justify-content:space-between;">
+        <label for="cfgBlack" style="margin-bottom:0; cursor:pointer;">Black mode (white text)</label>
+        <input type="checkbox" id="cfgBlack" onchange="applyBlackMode(this.checked)" style="width:20px; height:20px; cursor:pointer; accent-color:#fff;">
+      </div>
+      <div class="form-row" style="display:flex; align-items:center; justify-content:space-between;">
+        <label for="cfgSilence" style="margin-bottom:0; cursor:pointer;">Silence app audio (lets other music play)</label>
+        <input type="checkbox" id="cfgSilence" onchange="applySilence(this.checked)" style="width:20px; height:20px; cursor:pointer; accent-color:#fff;">
+      </div>
       <a href="tuner.html" style="display:block; text-align:center; padding:8px; background:#1e293b; border:1px solid var(--cyan); border-radius:8px; color:var(--cyan); font-size:0.85rem; font-weight:800; text-decoration:none;">🔧 Motor Tuner &amp; RPM Calibration ↗</a>
       <div class="modal-btns" style="margin-top:10px;">
         <button style="background:#334155; color:#fff;" onclick="closeSettings()">Cancel</button>
@@ -644,7 +666,9 @@
 
     // ---- Keep-alive: silent audio loop keeps Chrome/Android from throttling the page ----
     let keepAliveAudio = null, keepAliveWanted = false;
+    let audioSilenced = (localStorage.getItem('ss2k_silence_audio') === 'true');
     function startKeepAlive() {
+      if (audioSilenced) return;
       keepAliveWanted = true;
       try {
         if (!keepAliveAudio) {
@@ -1477,6 +1501,7 @@
     }
 
     function playBeep(freq, dur) {
+      if (audioSilenced) return;
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = audioCtx.createOscillator();
@@ -1587,7 +1612,26 @@
     }
     function openBtModal() { openModalId('btModal'); autoConnectPermittedDevices(); }
     function closeBtModal() { closeModalId('btModal'); }
+    function applyBlackMode(on) {
+      document.documentElement.classList.toggle('black', !!on);
+      try { localStorage.setItem('ss2k_black', on ? 'true' : 'false'); } catch (e) {}
+      const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = on ? '#000000' : '#070a13';
+    }
+    function applySilence(on) {
+      audioSilenced = !!on;
+      try { localStorage.setItem('ss2k_silence_audio', on ? 'true' : 'false'); } catch (e) {}
+      if (on) {
+        keepAliveWanted = false;
+        try { if (keepAliveAudio) keepAliveAudio.pause(); if ('mediaSession' in navigator) navigator.mediaSession.metadata = null; } catch (e) {}
+        showToast('Audio silenced: other music can play (Bluetooth may drop if the app is backgrounded)');
+      } else {
+        startKeepAlive();
+        showToast('Keep-alive audio on');
+      }
+    }
     function openSettings() {
+      document.getElementById('cfgBlack').checked = document.documentElement.classList.contains('black');
+      document.getElementById('cfgSilence').checked = audioSilenced;
       document.getElementById('cfgHRmax').value = userHRmax;
       document.getElementById('cfg4x4Work').value = target4x4Work;
       document.getElementById('cfg4x4Rest').value = target4x4Rest;
@@ -1652,7 +1696,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.4 • 2026-11-03 10:45</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.5 • 2026-11-03 11:00</span>
   </footer>
 
 </body>
