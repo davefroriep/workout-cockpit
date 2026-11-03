@@ -122,7 +122,7 @@
       border-radius: 12px;
       padding: 12px;
       margin-bottom: 12px;
-      display: none;
+      display: block;
     }
     .interval-meta {
       display: flex;
@@ -493,7 +493,7 @@
   </div>
 
   <!-- Workout chart + Finish / Discard -->
-  <div style="margin:8px 0 4px 0;">
+  <div id="woActions" style="margin:8px 0 4px 0; display:none;">
     <canvas id="woChart" height="64" style="width:100%; height:64px; background:#0b1220; border:1px solid #1e293b; border-radius:10px;"></canvas>
     <div style="display:flex; gap:8px; margin-top:8px;">
       <button class="btn-action" style="flex:1; padding:10px; background:rgba(34,197,94,0.15); border-color:#22c55e; color:#22c55e;" onclick="finishWorkoutUI()">⏹ FINISH &amp; SAVE</button>
@@ -825,6 +825,13 @@
       } else {
         lbl.textContent = 'RESUME'; sub.textContent = wo.auto ? 'Auto-paused' : 'Paused'; btn.className = 'btn-action play';
         badge.className = 'conn-badge connected'; bl.textContent = 'PAUSED ' + fmtHMS(wo.s);
+      }
+      const woBox = document.getElementById('woActions');
+      if (woBox) {
+        const show = wo.st !== 0;
+        const was = woBox.style.display !== 'none';
+        woBox.style.display = show ? 'block' : 'none';
+        if (show && !was) drawWoChart();
       }
       document.getElementById('valTotalTime').textContent = fmtHMS(wo.s);
       document.getElementById('valEnergy').textContent = `${Math.round(wo.kj)} kJ • ${wo.rev.toFixed(0)} revs`;
@@ -1595,7 +1602,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.8 • 2026-11-02 22:10</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.9 • 2026-11-02 22:25</span>
   </footer>
 
 </body>
