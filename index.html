@@ -128,11 +128,12 @@
     .interval-meta {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
+      align-items: center;
       margin-bottom: 8px;
     }
     .interval-title { font-size: 1.1rem; font-weight: 800; color: var(--cyan); text-transform: uppercase; }
-    .interval-timer { font-size: 1.6rem; font-weight: 900; font-family: monospace; color: #fff; }
+    .interval-timer { font-size: 1.6rem; font-weight: 900; font-family: monospace; color: #fff; line-height: 1.1; }
+    .interval-total { font-size: 0.75rem; color: var(--muted); font-weight: 700; font-family: monospace; margin-top: 3px; }
     
     .ribbon {
       display: flex;
@@ -403,7 +404,10 @@
         <div id="intPhase" class="interval-title">WARMUP</div>
         <div id="intSub" style="font-size:0.8rem; color:var(--muted); font-weight:600;">Interval 1 of 4</div>
       </div>
-      <div id="intTimer" class="interval-timer">10:00</div>
+      <div style="text-align:right;">
+        <div id="intTimer" class="interval-timer">10:00</div>
+        <div id="intTotalTime" class="interval-total">TOTAL: 00:00 / 40:00</div>
+      </div>
     </div>
     <div id="ribbon" class="ribbon"></div>
   </div>
@@ -866,6 +870,7 @@
       document.getElementById('valTotalTime').textContent = fmtHMS(wo.s);
       document.getElementById('valEnergy').textContent = `${Math.round(wo.kj)} kJ • ${wo.rev.toFixed(0)} revs`;
       totalWorkoutSeconds = wo.s;
+      updateIntTotalTime();
 
       // When in an active ERG workout, step buttons adjust Watts (±5W, ±10W).
       // When not in a workout (or in gears mode), step buttons shift resistance levels (±1, ±5).
@@ -899,6 +904,7 @@
         if (ws < acc + workoutIntervals[i].duration) { idx = i; break; }
         acc += workoutIntervals[i].duration;
       }
+      updateIntTotalTime();
       if (idx >= workoutIntervals.length) {
         document.getElementById('intPhase').textContent = 'PLAN COMPLETE';
         document.getElementById('intTimer').textContent = '00:00';
@@ -1477,6 +1483,7 @@
       document.getElementById('intPhase').textContent = cur.name;
       document.getElementById('intSub').textContent = cur.sub;
       document.getElementById('intTimer').textContent = formatTime(intervalSecondsLeft);
+      updateIntTotalTime();
 
       currentTargetWatts = cur.target;
       if (ergEnabled && activeMode !== 'gears') {
@@ -1498,6 +1505,28 @@
       const m = Math.floor(sec / 60).toString().padStart(2, '0');
       const s = (sec % 60).toString().padStart(2, '0');
       return `${m}:${s}`;
+    }
+
+    function formatTotalTime(sec) {
+      sec = Math.max(0, Math.floor(sec || 0));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) {
+        return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      }
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function updateIntTotalTime() {
+      const el = document.getElementById('intTotalTime');
+      if (!el) return;
+      if (!workoutIntervals || workoutIntervals.length === 0) {
+        el.textContent = `TOTAL: ${formatTotalTime(wo.s || 0)}`;
+        return;
+      }
+      const totalDur = workoutIntervals.reduce((sum, item) => sum + item.duration, 0);
+      el.textContent = `TOTAL: ${formatTotalTime(wo.s || 0)} / ${formatTotalTime(totalDur)}`;
     }
 
     function playBeep(freq, dur) {
@@ -1696,7 +1725,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.5 • 2026-11-03 11:00</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.6 • 2026-11-03 17:30</span>
   </footer>
 
 </body>
