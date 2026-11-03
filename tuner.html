@@ -769,14 +769,14 @@
       }
 
       c7Level = Math.max(1.0, Math.min(100.0, c7Level));
-      valC7Level.textContent = 'Lvl ' + c7Level.toFixed(1);
+      valC7Level.textContent = 'Lvl ' + Math.round(c7Level);
       valLevelSub.textContent = trackingSource;
       valLevelSub.style.color = trackingSource.startsWith('POT') ? 'var(--success)' : 'var(--warning)';
 
 
       const estWatts = calcC7Watts(c7Level, d.cad);
       valWatts.textContent = `${estWatts.toFixed(0)} W`;
-      valWattsSub.textContent = `${estWatts.toFixed(1)} W @ ${d.cad.toFixed(0)} RPM`;
+      valWattsSub.textContent = `${Math.round(estWatts)} W @ ${d.cad.toFixed(0)} RPM`;
 
       if (d.run) {
         motorStateBadge.textContent = 'RUNNING';
@@ -1048,7 +1048,7 @@
 
   <footer style="margin-top: 24px; padding: 12px 4px; text-align: center; font-size: 0.75rem; color: #94a3b8; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K CALIBRATION & DIAGNOSTICS</span>
-    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v5.9 • 2026-11-02 22:25</span>
+    <span id="appRevBadge" style="background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #334155;">Rev v6.0 • 2026-11-03 07:30</span>
   </footer>
 
 </body>
