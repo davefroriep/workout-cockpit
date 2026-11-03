@@ -346,6 +346,7 @@
       <span>SS2K</span> COCKPIT
     </div>
     <div class="status-group">
+      <a href="tuner.html" class="conn-badge" style="text-decoration:none; color:var(--cyan); border-color:var(--cyan); padding:4px 10px; font-weight:700;">🔧 CALIBRATE</a>
       <div id="btnFlightRec" class="conn-badge" onclick="woBadgeTap()" title="Workout stored on the SS2K - tap for status" style="cursor:pointer;">
         <div class="conn-dot" style="background:#ef4444;"></div>
         <span id="labelFlightRec">NO WORKOUT</span>
@@ -542,6 +543,9 @@
           <input type="checkbox" id="cfgIntervalsAuto" checked style="width:20px; height:20px; cursor:pointer; accent-color:var(--cyan);">
         </div>
       </div>
+      <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #334155;">
+        <a href="tuner.html" style="display:block; text-align:center; padding:10px; background:#1e293b; border:1px solid var(--cyan); border-radius:8px; color:var(--cyan); font-weight:800; text-decoration:none;">🔧 Open 100-Rev Cadence Calibration & Motor Tuner ↗</a>
+      </div>
       <div class="modal-btns">
         <button style="background:#334155; color:#fff;" onclick="closeSettings()">Cancel</button>
         <button style="background:var(--cyan); color:#022c22;" onclick="saveSettings()">Save & Apply</button>
@@ -677,8 +681,15 @@
         rxBuffer = '';
         lastRxMs = Date.now();
         setSS2KBadge(true, ss2kDrops ? `SS2K CONNECTED (${ss2kDrops} drops)` : 'SS2K CONNECTED');
-        if (rehabLocked) sendSS2KCmd('SET_REHAB:1');   // only ever push the SAFE state
-        sendSS2KCmd('WO_SYNC');                         // pull the workout the device is holding
+        if (rehabLocked) sendSS2KCmd('SET_REHAB:1');
+        else sendSS2KCmd('SET_REHAB:0');
+        if (activeMode !== 'gears') {
+          sendSS2KCmd('SET_MODE:1');
+          sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
+        } else {
+          sendSS2KCmd('SET_MODE:0');
+        }
+        sendSS2KCmd('WO_SYNC');
       } catch (e) {
         console.warn('SS2K connect failed, retrying', e);
         setSS2KBadge(false, `SS2K RETRYING (${ss2kDrops} drops)`);
@@ -1084,8 +1095,8 @@
         }
       }
 
-      // Sync Handlebar Button Steps
-      if (d.tgt_w !== undefined && d.tgt_w !== currentTargetWatts && activeMode !== '4x4') {
+      // Sync Handlebar Button Steps (Bike ERG mode pushes new target watts)
+      if (d.tgt_w !== undefined && d.tgt_w > 0 && d.tgt_w !== currentTargetWatts && activeMode !== '4x4') {
         currentTargetWatts = d.tgt_w;
         document.getElementById('valTargetPower').textContent = `TARGET: ${currentTargetWatts} W`;
       }
@@ -1199,10 +1210,12 @@
       if (m === '4x4') {
         document.getElementById('tab4x4').classList.add('active');
         document.getElementById('intervalCard').style.display = 'block';
+        sendSS2KCmd('SET_MODE:1');
         build4x4Workout();
       } else if (m === 'z2') {
         document.getElementById('tabZ2').classList.add('active');
         document.getElementById('intervalCard').style.display = 'block';
+        sendSS2KCmd('SET_MODE:1');
         buildZ2Workout();
       } else if (m === 'erg') {
         document.getElementById('tabERG').classList.add('active');
@@ -1268,8 +1281,8 @@
       document.getElementById('intSub').textContent = cur.sub;
       document.getElementById('intTimer').textContent = formatTime(intervalSecondsLeft);
 
-      if (!rehabLocked) {
-        currentTargetWatts = cur.target;
+      currentTargetWatts = cur.target;
+      if (activeMode !== 'gears') {
         sendSS2KCmd('SET_MODE:1');
         sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
       }
@@ -1374,7 +1387,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.1 • 2026-11-02 19:09</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.2 • 2026-11-02 19:28</span>
   </footer>
 
 </body>
