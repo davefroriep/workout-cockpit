@@ -325,6 +325,7 @@
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
     }
+    #btModal { z-index: 110; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
     .form-grid .form-row { margin-bottom: 8px; }
     .form-grid .form-row label { font-size: 0.7rem; margin-bottom: 2px; }
@@ -356,16 +357,22 @@
       <span>SS2K</span> COCKPIT
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
-      <div id="hdrPill" onclick="openBtModal()" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.72rem; font-family: monospace; padding: 5px 8px; background: rgba(30,41,59,0.7); border-radius: 6px; border: 1px solid var(--card-border);" title="Tap for Bluetooth connections">
-        <span id="hdrDotSS2K" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
-        <span style="font-weight:700; color:#fff;">BIKE</span>
+      <div id="hdrPill" style="display: flex; align-items: center; font-size: 0.72rem; font-family: monospace; background: rgba(30,41,59,0.7); border-radius: 6px; border: 1px solid var(--card-border); overflow: hidden;">
+        <div id="pillBike" onclick="tapBike()" style="display:flex; align-items:center; gap:6px; padding:7px 9px; cursor:pointer;" title="Tap to connect bike">
+          <span id="hdrDotSS2K" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
+          <span style="font-weight:700; color:#fff;">BIKE</span>
+        </div>
         <span style="opacity:0.3;">|</span>
-        <span id="hdrDotPolar" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
-        <span style="font-weight:700; color:#fff;">HR</span>
+        <div id="pillHr" onclick="tapHr()" style="display:flex; align-items:center; gap:6px; padding:7px 9px; cursor:pointer;" title="Tap to connect heart-rate strap">
+          <span id="hdrDotPolar" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
+          <span style="font-weight:700; color:#fff;">HR</span>
+        </div>
       </div>
       <div class="conn-badge" onclick="openSettings()" style="padding: 5px 9px; font-size: 1.15rem; cursor: pointer; background: #1e293b; border-color: #334155; border-radius: 8px;" title="Hardware Connections & Settings">⚙️</div>
     </div>
   </header>
+  <div id="btHint" style="display:none; margin:-4px 0 10px 0; padding:8px 10px; border-radius:8px; background:rgba(234,179,8,0.12); border:1px solid #eab308; color:#fde68a; font-size:0.75rem; line-height:1.35;"></div>
+  <div id="toast" style="position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:#0f172a; color:#e2e8f0; border:1px solid #334155; padding:9px 14px; border-radius:10px; font-size:0.8rem; z-index:300; display:none;"></div>
 
   <!-- Post-Op Safety Banner -->
   <div style="margin-bottom: 12px;">
@@ -555,6 +562,7 @@
         <label for="cfgIntervalsAuto" style="margin-bottom:0; cursor:pointer;">Auto-upload on finish</label>
         <input type="checkbox" id="cfgIntervalsAuto" checked style="width:20px; height:20px; cursor:pointer; accent-color:var(--cyan);">
       </div>
+      <div onclick="openBtModal()" style="text-align:center; padding:8px; margin-bottom:6px; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#94a3b8; font-size:0.8rem; font-weight:700; cursor:pointer;">📡 Bluetooth &amp; Flight Recorder Details</div>
       <a href="tuner.html" style="display:block; text-align:center; padding:8px; background:#1e293b; border:1px solid var(--cyan); border-radius:8px; color:var(--cyan); font-size:0.85rem; font-weight:800; text-decoration:none;">🔧 Motor Tuner &amp; RPM Calibration ↗</a>
       <div class="modal-btns" style="margin-top:10px;">
         <button style="background:#334155; color:#fff;" onclick="closeSettings()">Cancel</button>
@@ -1299,7 +1307,9 @@
 
     // --- Persistent Auto-Connect on Load, touch, focus and a 4s retry loop ---
     let isAutoConnecting = false, btAdvWatched = new Set();
+    let btLastReason = '';
     function btDiag(msg) {
+      btLastReason = msg;
       const el = document.getElementById('btDiag');
       if (el) el.textContent = 'Auto-connect: ' + msg;
       console.log('[BLE]', msg);
@@ -1344,6 +1354,20 @@
         isAutoConnecting = false;
       }
     }
+
+    // Visible hint whenever the bike is not connected, explaining why auto-connect didn't work
+    setInterval(() => {
+      const hint = document.getElementById('btHint');
+      if (!hint) return;
+      if (ss2kDevice && ss2kDevice.gatt.connected) { hint.style.display = 'none'; return; }
+      let msg;
+      if (!navigator.bluetooth) msg = '⚠ This browser has no Web Bluetooth. Use Chrome.';
+      else if (!navigator.bluetooth.getDevices) msg = '⚠ This Chrome cannot remember Bluetooth devices. Enable chrome://flags/#enable-web-bluetooth-new-permissions-backend, or tap BIKE after each launch.';
+      else if (/NOT remembered/.test(btLastReason)) msg = '⚠ Bike not remembered by this app yet. Tap BIKE once and pick it — after that it auto-connects.';
+      else if (/error/i.test(btLastReason)) msg = '⚠ ' + btLastReason;
+      else msg = '🔄 Looking for the bike… (make sure it is powered and nothing else is connected). Tap BIKE to pick it manually.';
+      hint.textContent = msg; hint.style.display = 'block';
+    }, 2000);
 
     // Auto-connect triggers
     window.addEventListener('DOMContentLoaded', autoConnectPermittedDevices);
@@ -1569,9 +1593,40 @@
       if (history.state && history.state.modal === id) history.back();
       else el.classList.remove('active');
     }
-    window.addEventListener('popstate', () => {
+    // ---- Back-swipe handling: modals close first; at the cockpit root, ask "Exit?" ----
+    function anyModalOpen() { return ['settingsModal', 'btModal'].some(id => document.getElementById(id).classList.contains('active')); }
+    function armExitGuard() {
+      // Chrome only keeps history entries created after a user gesture, so arm on first touch
+      if (!(history.state && (history.state.guard || history.state.modal))) {
+        history.replaceState({ base: 1 }, '');
+        history.pushState({ guard: 1 }, '');
+      }
+    }
+    window.addEventListener('pointerdown', armExitGuard, { once: true, passive: true });
+    window.addEventListener('popstate', (e) => {
+      const hadModal = anyModalOpen();
       ['settingsModal', 'btModal'].forEach(id => document.getElementById(id).classList.remove('active'));
+      if (hadModal || (e.state && (e.state.guard || e.state.modal))) return;   // closed a dialog; stay in cockpit
+      // Backed out of the cockpit itself -> confirm
+      if (confirm('Exit SS2K Cockpit?\n\nYour workout keeps recording on the bike, but this screen will disconnect.')) {
+        history.back();
+      } else {
+        history.pushState({ guard: 1 }, '');
+      }
     });
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.style.display = 'block';
+      clearTimeout(showToast._t); showToast._t = setTimeout(() => t.style.display = 'none', 2200);
+    }
+    function tapBike() {
+      if (ss2kDevice && ss2kDevice.gatt.connected) { showToast('🚲 Bike connected'); return; }
+      pairSS2K();
+    }
+    function tapHr() {
+      if (polarDevice && polarDevice.gatt.connected) { showToast('❤️ HR strap connected'); return; }
+      pairPolarH10();
+    }
     function openBtModal() { openModalId('btModal'); autoConnectPermittedDevices(); }
     function closeBtModal() { closeModalId('btModal'); }
     function openSettings() {
@@ -1639,7 +1694,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.0 • 2026-11-03 07:30</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.1 • 2026-11-03 07:55</span>
   </footer>
 
 </body>
