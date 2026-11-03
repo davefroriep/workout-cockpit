@@ -656,14 +656,27 @@
     }
 
     // ---- Keep-alive: silent audio loop keeps Chrome/Android from throttling the page ----
-    let keepAliveAudio = null;
+    let keepAliveAudio = null, keepAliveWanted = false;
     function startKeepAlive() {
+      keepAliveWanted = true;
       try {
-        if (!keepAliveAudio) { keepAliveAudio = new Audio('silent.wav'); keepAliveAudio.loop = true; keepAliveAudio.volume = 0.01; }
+        if (!keepAliveAudio) {
+          keepAliveAudio = new Audio('silent.wav'); keepAliveAudio.loop = true; keepAliveAudio.volume = 0.01;
+          // Another app (music, call, video) pauses us via audio focus loss -> restart as soon as we can
+          keepAliveAudio.addEventListener('pause', () => { if (keepAliveWanted) setTimeout(resumeKeepAlive, 300); });
+          keepAliveAudio.addEventListener('ended', () => { if (keepAliveWanted) resumeKeepAlive(); });
+        }
         keepAliveAudio.play().catch(() => {});
         if ('mediaSession' in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: 'SS2K Workout', artist: 'Cockpit' });
       } catch (e) {}
     }
+    function resumeKeepAlive() {
+      if (!keepAliveWanted || !keepAliveAudio || !keepAliveAudio.paused) return;
+      keepAliveAudio.play().catch(() => {});
+    }
+    // Safety net: if the loop is paused for any reason, keep trying to restart it
+    setInterval(resumeKeepAlive, 3000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resumeKeepAlive(); });
 
     // ---- SS2K link: never gives up, never duplicates handlers ----
     let ss2kConnecting = false, ss2kRetryTimer = null, ss2kDrops = 0, ss2kListenersFor = null, lastRxMs = 0;
@@ -1694,7 +1707,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.1 • 2026-11-03 07:55</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.2 • 2026-11-03 08:20</span>
   </footer>
 
 </body>
