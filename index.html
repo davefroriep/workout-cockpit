@@ -363,15 +363,29 @@
     </div>
   </header>
 
-  <!-- Post-Op Safety Banner -->
-  <div id="rehabBar">
-    <div>
-      <b style="color:#10b981;">🛡️ REHAB LOCK ACTIVE:</b> Level 1 Free-Spin Floor
+  <!-- Control Bar: Rehab Lock & ERG Mode Toggle -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+    <!-- Post-Op Safety Banner -->
+    <div id="rehabBar" style="margin-bottom:0;">
+      <div>
+        <b style="color:#10b981;">🛡️ REHAB:</b> L1 Floor
+      </div>
+      <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+        <span style="font-size:0.75rem; color:#94a3b8;">LOCK:</span>
+        <input type="checkbox" id="chkRehab" checked onchange="toggleRehab(this.checked)" style="accent-color:#10b981; width:18px; height:18px;">
+      </label>
     </div>
-    <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-      <span style="font-size:0.75rem; color:#94a3b8;">LOCK:</span>
-      <input type="checkbox" id="chkRehab" checked onchange="toggleRehab(this.checked)" style="accent-color:#10b981; width:18px; height:18px;">
-    </label>
+
+    <!-- ERG Mode Master Toggle -->
+    <div id="ergBar" style="background: rgba(6,182,212,0.12); border: 1px solid var(--cyan); border-radius: 8px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+      <div>
+        <b id="ergBarLabel" style="color:var(--cyan);">⚡ ERG MODE: ON</b>
+      </div>
+      <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+        <span style="font-size:0.75rem; color:#94a3b8;">AUTO:</span>
+        <input type="checkbox" id="chkErg" checked onchange="toggleErgMode(this.checked)" style="accent-color:var(--cyan); width:18px; height:18px;">
+      </label>
+    </div>
   </div>
 
   <!-- Mode Selector Tabs -->
@@ -401,7 +415,7 @@
     <div class="metric-card hero-power">
       <div class="card-label">
         <span>POWER OUTPUT</span>
-        <span id="powerModeTag" style="color:var(--magenta); font-weight:800;">CLOSED-LOOP ERG</span>
+        <span id="powerModeTag" onclick="toggleErgMode()" style="color:var(--cyan); font-weight:800; cursor:pointer;" title="Tap to toggle ERG mode ON/OFF">⚡ ERG ON</span>
       </div>
       <div class="hero-number-row">
         <span id="valPower" class="hero-val" style="color:var(--cyan);">0</span>
@@ -412,7 +426,7 @@
           <div class="gauge-center"></div>
           <div id="gaugeFill" class="gauge-fill"></div>
         </div>
-        <span id="valTargetPower" class="gauge-target-label">TARGET: 150 W</span>
+        <span id="valTargetPower" class="gauge-target-label" onclick="toggleErgMode()" style="cursor:pointer;" title="Tap to toggle ERG mode">TARGET: 145 W</span>
       </div>
     </div>
 
@@ -570,6 +584,7 @@
     let liveCadence = 0;
     let liveHR = 0;
     let rehabLocked = true;
+    let ergEnabled = true;
 
     // Bluetooth Hardware Objects
     let ss2kDevice = null;
@@ -683,7 +698,7 @@
         setSS2KBadge(true, ss2kDrops ? `SS2K CONNECTED (${ss2kDrops} drops)` : 'SS2K CONNECTED');
         if (rehabLocked) sendSS2KCmd('SET_REHAB:1');
         else sendSS2KCmd('SET_REHAB:0');
-        if (activeMode !== 'gears') {
+        if (ergEnabled && activeMode !== 'gears') {
           sendSS2KCmd('SET_MODE:1');
           sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
         } else {
@@ -1070,6 +1085,15 @@
         }
       }
 
+      // Sync Hardware Operating Mode (0 = Gears, 1 = ERG)
+      if (d.mode !== undefined) {
+        const isErg = (d.mode === 1);
+        if (ergEnabled !== isErg) {
+          ergEnabled = isErg;
+          applyErgVisuals(isErg);
+        }
+      }
+
       // Live Cadence
       liveCadence = d.cad;
       document.getElementById('valCadence').textContent = d.cad.toFixed(0);
@@ -1238,23 +1262,30 @@
       if (m === '4x4') {
         document.getElementById('tab4x4').classList.add('active');
         document.getElementById('intervalCard').style.display = 'block';
-        sendSS2KCmd('SET_MODE:1');
         build4x4Workout();
+        if (ergEnabled) {
+          sendSS2KCmd('SET_MODE:1');
+          sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
+        } else {
+          sendSS2KCmd('SET_MODE:0');
+        }
       } else if (m === 'z2') {
         document.getElementById('tabZ2').classList.add('active');
         document.getElementById('intervalCard').style.display = 'block';
-        sendSS2KCmd('SET_MODE:1');
         buildZ2Workout();
+        if (ergEnabled) {
+          sendSS2KCmd('SET_MODE:1');
+          sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
+        } else {
+          sendSS2KCmd('SET_MODE:0');
+        }
       } else if (m === 'erg') {
         document.getElementById('tabERG').classList.add('active');
         currentTargetWatts = 150;
-        sendSS2KCmd('SET_MODE:1');
-        sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
-        document.getElementById('valTargetPower').textContent = `TARGET: ${currentTargetWatts} W`;
+        toggleErgMode(true);
       } else if (m === 'gears') {
         document.getElementById('tabGears').classList.add('active');
-        sendSS2KCmd('SET_MODE:0');
-        document.getElementById('valTargetPower').textContent = `MANUAL GEARS (1-100)`;
+        toggleErgMode(false);
       }
     }
 
@@ -1310,11 +1341,14 @@
       document.getElementById('intTimer').textContent = formatTime(intervalSecondsLeft);
 
       currentTargetWatts = cur.target;
-      if (activeMode !== 'gears') {
+      if (ergEnabled && activeMode !== 'gears') {
         sendSS2KCmd('SET_MODE:1');
         sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
+        document.getElementById('valTargetPower').textContent = `TARGET: ${cur.target} W`;
+      } else {
+        sendSS2KCmd('SET_MODE:0');
+        document.getElementById('valTargetPower').textContent = `TARGET: ${cur.target} W (MANUAL)`;
       }
-      document.getElementById('valTargetPower').textContent = `TARGET: ${cur.target} W`;
 
       // Highlight active block in ribbon
       document.querySelectorAll('.ribbon-block').forEach((b, i) => {
@@ -1351,19 +1385,52 @@
       const bar = document.getElementById('rehabBar');
       if (checked) {
         bar.className = '';
-        bar.innerHTML = `<div><b style="color:#10b981;">🛡️ REHAB LOCK ACTIVE:</b> Level 1 Free-Spin Floor</div>
+        bar.innerHTML = `<div><b style="color:#10b981;">🛡️ REHAB:</b> L1 Floor</div>
                          <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
                            <span style="font-size:0.75rem; color:#94a3b8;">LOCK:</span>
                            <input type="checkbox" id="chkRehab" checked onchange="toggleRehab(this.checked)" style="accent-color:#10b981; width:18px; height:18px;">
                          </label>`;
       } else {
         bar.className = 'unlocked';
-        bar.innerHTML = `<div><b style="color:#eab308;">⚠️ UNLOCKED:</b> Full Resistance Active</div>
+        bar.innerHTML = `<div><b style="color:#eab308;">⚠️ REHAB:</b> Full 1-100</div>
                          <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
                            <span style="font-size:0.75rem; color:#94a3b8;">LOCK:</span>
                            <input type="checkbox" id="chkRehab" onchange="toggleRehab(this.checked)" style="accent-color:#eab308; width:18px; height:18px;">
                          </label>`;
       }
+    }
+
+    function toggleErgMode(forcedState) {
+      if (forcedState !== undefined) ergEnabled = forcedState;
+      else ergEnabled = !ergEnabled;
+      applyErgVisuals(ergEnabled);
+      if (ergEnabled) {
+        sendSS2KCmd('SET_MODE:1');
+        sendSS2KCmd(`SET_WATTS:${currentTargetWatts}`);
+      } else {
+        sendSS2KCmd('SET_MODE:0');
+      }
+    }
+
+    function applyErgVisuals(isErg) {
+      const chk = document.getElementById('chkErg');
+      if (chk) chk.checked = isErg;
+      const bar = document.getElementById('ergBar');
+      const lbl = document.getElementById('ergBarLabel');
+      const tag = document.getElementById('powerModeTag');
+      const tgt = document.getElementById('valTargetPower');
+      if (isErg) {
+        if (bar) { bar.style.background = 'rgba(6,182,212,0.12)'; bar.style.borderColor = 'var(--cyan)'; }
+        if (lbl) { lbl.textContent = '⚡ ERG MODE: ON'; lbl.style.color = 'var(--cyan)'; }
+        if (tag) { tag.textContent = '⚡ ERG ON'; tag.style.color = 'var(--cyan)'; }
+        if (tgt) { tgt.textContent = `TARGET: ${currentTargetWatts} W`; tgt.style.color = 'var(--cyan)'; }
+      } else {
+        if (bar) { bar.style.background = 'rgba(51,65,85,0.4)'; bar.style.borderColor = '#475569'; }
+        if (lbl) { lbl.textContent = '⚙️ ERG: OFF (MANUAL)'; lbl.style.color = 'var(--muted)'; }
+        if (tag) { tag.textContent = '⚙️ ERG OFF (GEARS)'; tag.style.color = 'var(--muted)'; }
+        if (tgt) { tgt.textContent = `MANUAL GEARS (1-100)`; tgt.style.color = 'var(--muted)'; }
+      }
+    }
     }
 
     // Modal Handlers
@@ -1415,7 +1482,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.3 • 2026-11-02 19:35</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.4 • 2026-11-02 20:15</span>
   </footer>
 
 </body>
