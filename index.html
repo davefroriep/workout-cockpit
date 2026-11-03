@@ -1178,8 +1178,10 @@
         currentC7Level = LVL_ACTIVE_END + ((d.pos - BOT_DB_START) / dbSpan) * (100.0 - LVL_ACTIVE_END);
       }
       currentC7Level = Math.max(1.0, Math.min(100.0, currentC7Level));
+      // Newer firmware reports the level on the C7 console scale directly (lightest = 3)
+      if (d.lvl !== undefined) currentC7Level = d.lvl;
       // Display resistance level in whole numbers
-      const dispLevel = (d.tlvl !== undefined) ? d.tlvl : Math.round(currentC7Level);
+      const dispLevel = (d.lvl !== undefined) ? Math.round(d.lvl) : ((d.tlvl !== undefined) ? d.tlvl : Math.round(currentC7Level));
       document.getElementById('valC7Level').textContent = dispLevel;
       document.getElementById('valPotAdc').textContent = `Pot: ${d.pot} (${(d.v).toFixed(2)}V)`;
 
@@ -1194,6 +1196,7 @@
       } else {
         liveWatts = 0;
       }
+      if (d.ew !== undefined) liveWatts = d.ew;   // firmware power model (refit to C7 telemetry)
       document.getElementById('valPower').textContent = Math.round(liveWatts);
 
       // Power Target Gauge Fill
@@ -1707,7 +1710,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.2 • 2026-11-03 08:20</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v6.3 • 2026-11-03 10:30</span>
   </footer>
 
 </body>
