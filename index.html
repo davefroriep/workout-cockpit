@@ -527,6 +527,21 @@
         <label>Flywheel Pulley Ratio (Calibrated):</label>
         <input type="number" step="0.01" id="cfgRatio" value="3.80">
       </div>
+      <div style="margin: 14px 0 10px 0; padding-top: 10px; border-top: 1px solid #334155;">
+        <div style="font-size: 0.85rem; font-weight: 800; color: var(--cyan); margin-bottom: 8px;">📊 Intervals.icu Sync</div>
+        <div class="form-row">
+          <label>Intervals Athlete ID:</label>
+          <input type="text" id="cfgIntervalsAthlete" value="i758105">
+        </div>
+        <div class="form-row">
+          <label>Intervals API Key:</label>
+          <input type="password" id="cfgIntervalsApiKey" value="4d5rn0dcv82roimz7sm6g84g9">
+        </div>
+        <div class="form-row" style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;">
+          <label for="cfgIntervalsAuto" style="margin-bottom:0; cursor:pointer;">Auto-upload on finish:</label>
+          <input type="checkbox" id="cfgIntervalsAuto" checked style="width:20px; height:20px; cursor:pointer; accent-color:var(--cyan);">
+        </div>
+      </div>
       <div class="modal-btns">
         <button style="background:#334155; color:#fff;" onclick="closeSettings()">Cancel</button>
         <button style="background:var(--cyan); color:#022c22;" onclick="saveSettings()">Save & Apply</button>
@@ -834,7 +849,81 @@
       showWoModal('Saving workout from SS2K...');
       sendSS2KCmd('WO_SYNC:F');   // full-resolution history
     }
-    function completeSave() {
+    function buildTCXXml(rec, title) {
+      const startIso = (rec.startEpoch ? new Date(rec.startEpoch * 1000) : new Date()).toISOString();
+      const durSec = rec.seconds || rec.points.length;
+      const calories = Math.round((rec.kj || 0) * 0.239);
+      const baseMs = (rec.startEpoch ? rec.startEpoch * 1000 : Date.now() - durSec * 1000);
+      
+      let tpx = '';
+      (rec.points || []).forEach(pt => {
+        const ptTime = new Date(baseMs + (pt.t * 1000)).toISOString();
+        let hrPart = '';
+        if (pt.hr && pt.hr > 30) {
+          hrPart = `<HeartRateBpm><Value>${Math.round(pt.hr)}</Value></HeartRateBpm>`;
+        }
+        const cadPart = `<Cadence>${Math.round(pt.cad || 0)}</Cadence>`;
+        const wattsPart = `<Extensions><ns3:TPX><ns3:Watts>${Math.round(pt.w || 0)}</ns3:Watts></ns3:TPX></Extensions>`;
+        tpx += `<Trackpoint><Time>${ptTime}</Time>${cadPart}${hrPart}${wattsPart}</Trackpoint>`;
+      });
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
+  xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+  <Activities>
+    <Activity Sport="Biking">
+      <Id>${startIso}</Id>
+      <Lap StartTime="${startIso}">
+        <TotalTimeSeconds>${durSec}</TotalTimeSeconds>
+        <DistanceMeters>0</DistanceMeters>
+        <Calories>${calories}</Calories>
+        <Intensity>Active</Intensity>
+        <TriggerMethod>Manual</TriggerMethod>
+        <Track>${tpx}</Track>
+      </Lap>
+    </Activity>
+  </Activities>
+</TrainingCenterDatabase>`;
+    }
+
+    async function uploadToIntervals(rec) {
+      const athleteId = localStorage.getItem('ss2k_intervals_athlete_id') || 'i758105';
+      const apiKey = localStorage.getItem('ss2k_intervals_api_key') || '4d5rn0dcv82roimz7sm6g84g9';
+      if (!apiKey) return { ok: false, error: 'No Intervals.icu API Key configured' };
+
+      const modeName = (activeMode === '4x4' ? 'Norwegian 4x4' : (activeMode === 'z2' ? 'Zone 2 Base' : 'SmartSpin2k Ride'));
+      const title = `${modeName} (Bowflex C7)`;
+      const desc = `SS2K Cockpit • Time: ${fmtHMS(rec.seconds)} • Revs: ${rec.revs.toFixed(0)} • Work: ${Math.round(rec.kj)} kJ • Max: ${rec.maxW}W • SmartSpin2k + Bowflex C7`;
+      
+      const tcxXml = buildTCXXml(rec, title);
+      const blob = new Blob([tcxXml], { type: 'application/vnd.garmin.tcx+xml' });
+      const formData = new FormData();
+      formData.append('file', blob, `SS2K_Workout_${rec.id}.tcx`);
+
+      const url = `https://intervals.icu/api/v1/athlete/${encodeURIComponent(athleteId)}/activities?name=${encodeURIComponent(title)}&description=${encodeURIComponent(desc)}`;
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + btoa('API_KEY:' + apiKey)
+          },
+          body: formData
+        });
+        if (res.ok || res.status === 201 || res.status === 200) {
+          const data = await res.json();
+          const actId = data.id || (data.activities && data.activities[0] && data.activities[0].id) || (Array.isArray(data) && data[0] && data[0].id);
+          return { ok: true, activityId: actId };
+        } else {
+          const errText = await res.text();
+          return { ok: false, error: `HTTP ${res.status}: ${errText.slice(0, 100)}` };
+        }
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    }
+
+    async function completeSave() {
       woPendingSave = false;
       const points = [...woPoints.entries()].sort((a, b) => a[0] - b[0]).map(([i, v]) => ({ t: i, ...v }));
       const rec = { id: wo.id, startEpoch: wo.ep, seconds: wo.s, pulses: wo.p, revs: wo.rev, kj: wo.kj, maxW: wo.mw, ratio: flywheelRatio, points };
@@ -842,19 +931,82 @@
       try {
         const all = JSON.parse(localStorage.getItem('ss2k_workouts') || '[]');
         all.push(rec);
-        while (all.length > 15) all.shift();
+        while (all.length > 20) all.shift();
         localStorage.setItem('ss2k_workouts', JSON.stringify(all));
         saved = true;
       } catch (e) {}
-      if (saved && points.length >= Math.min(wo.s, 5)) {
-        sendSS2KCmd('WO_DISCARD');   // device copy is cleared ONLY after the phone confirmed it has the data
-        document.getElementById('woModalTitle').textContent = '✅ Workout saved';
-        document.getElementById('woModalBody').innerHTML = `<b>${fmtHMS(rec.seconds)}</b> &bull; ${rec.revs.toFixed(0)} revs &bull; ${Math.round(rec.kj)} kJ &bull; max ${rec.maxW} W<br>${points.length} data points`;
-      } else {
+
+      if (!saved || points.length < Math.min(wo.s, 5)) {
         document.getElementById('woModalTitle').textContent = '⚠️ Save incomplete - workout kept on SS2K';
-        document.getElementById('woModalBody').innerHTML = 'Nothing was deleted. Reconnect and try Finish again.';
+        document.getElementById('woModalBody').innerHTML = 'Data was not fully transferred. Nothing was deleted. Reconnect and tap Finish again.';
+        document.getElementById('woModalBtns').innerHTML = `<button style="background:#334155;color:#fff;" onclick="closeWoModal()">OK</button>`;
+        return;
       }
-      document.getElementById('woModalBtns').innerHTML = `<button style="background:#334155;color:#fff;" onclick="closeWoModal()">OK</button>`;
+
+      // Safe to clear SS2K hardware flash now that phone has full data
+      sendSS2KCmd('WO_DISCARD');
+
+      const autoUpload = (localStorage.getItem('ss2k_intervals_auto_upload') !== 'false');
+      if (autoUpload) {
+        document.getElementById('woModalTitle').textContent = 'Uploading to Intervals.icu...';
+        document.getElementById('woModalBody').innerHTML = `<b>${fmtHMS(rec.seconds)}</b> &bull; ${rec.revs.toFixed(0)} revs &bull; ${Math.round(rec.kj)} kJ<br><span style="color:var(--cyan)">Syncing TCX activity to Intervals.icu...</span>`;
+        document.getElementById('woModalBtns').innerHTML = '';
+
+        const uploadRes = await uploadToIntervals(rec);
+        if (uploadRes.ok) {
+          document.getElementById('woModalTitle').textContent = '✅ Synced to Intervals.icu';
+          document.getElementById('woModalBody').innerHTML = `
+            <div style="font-weight:700; color:var(--green); margin-bottom:8px;">Uploaded successfully!</div>
+            <div><b>${fmtHMS(rec.seconds)}</b> &bull; ${rec.revs.toFixed(0)} revs &bull; ${Math.round(rec.kj)} kJ &bull; max ${rec.maxW} W</div>
+            <div style="color:#64748b; font-size:0.8rem; margin-top:4px;">${points.length} second-by-second records</div>
+            ${uploadRes.activityId ? `<div style="margin-top:12px;"><a href="https://intervals.icu/activities/${uploadRes.activityId}" target="_blank" style="color:var(--cyan); text-decoration:underline; font-weight:700;">Open Activity #${uploadRes.activityId} on Intervals.icu ↗</a></div>` : ''}
+          `;
+          document.getElementById('woModalBtns').innerHTML = `<button style="background:var(--cyan);color:#022c22;font-weight:800;" onclick="closeWoModal()">Done</button>`;
+        } else {
+          document.getElementById('woModalTitle').textContent = '💾 Saved Locally (Intervals Failed)';
+          document.getElementById('woModalBody').innerHTML = `
+            <div><b>${fmtHMS(rec.seconds)}</b> &bull; ${rec.revs.toFixed(0)} revs &bull; ${Math.round(rec.kj)} kJ &bull; max ${rec.maxW} W</div>
+            <div style="color:var(--amber); margin-top:8px; font-size:0.85rem;">Intervals.icu returned: ${uploadRes.error}</div>
+            <div style="color:#64748b; font-size:0.8rem; margin-top:4px;">Your workout is preserved in local storage.</div>
+          `;
+          document.getElementById('woModalBtns').innerHTML = `
+            <button style="background:var(--cyan);color:#022c22;" onclick="retryIntervalsUpload('${rec.id}')">Retry Upload</button>
+            <button style="background:#334155;color:#fff;" onclick="closeWoModal()">Close</button>
+          `;
+        }
+      } else {
+        document.getElementById('woModalTitle').textContent = '✅ Workout saved locally';
+        document.getElementById('woModalBody').innerHTML = `<b>${fmtHMS(rec.seconds)}</b> &bull; ${rec.revs.toFixed(0)} revs &bull; ${Math.round(rec.kj)} kJ &bull; max ${rec.maxW} W<br>${points.length} data points`;
+        document.getElementById('woModalBtns').innerHTML = `
+          <button style="background:var(--cyan);color:#022c22;" onclick="retryIntervalsUpload('${rec.id}')">Upload to Intervals</button>
+          <button style="background:#334155;color:#fff;" onclick="closeWoModal()">OK</button>
+        `;
+      }
+    }
+
+    async function retryIntervalsUpload(recId) {
+      const all = JSON.parse(localStorage.getItem('ss2k_workouts') || '[]');
+      const rec = all.find(r => String(r.id) === String(recId)) || all[all.length - 1];
+      if (!rec) { alert('Workout not found in storage'); return; }
+      document.getElementById('woModalTitle').textContent = 'Uploading to Intervals.icu...';
+      document.getElementById('woModalBody').innerHTML = 'Sending workout TCX file...';
+      document.getElementById('woModalBtns').innerHTML = '';
+      const uploadRes = await uploadToIntervals(rec);
+      if (uploadRes.ok) {
+        document.getElementById('woModalTitle').textContent = '✅ Synced to Intervals.icu';
+        document.getElementById('woModalBody').innerHTML = `
+          <div style="font-weight:700; color:var(--green); margin-bottom:8px;">Uploaded successfully!</div>
+          <div><b>${fmtHMS(rec.seconds)}</b> &bull; ${rec.revs.toFixed(0)} revs &bull; ${Math.round(rec.kj)} kJ</div>
+          ${uploadRes.activityId ? `<div style="margin-top:12px;"><a href="https://intervals.icu/activities/${uploadRes.activityId}" target="_blank" style="color:var(--cyan); text-decoration:underline; font-weight:700;">Open Activity #${uploadRes.activityId} on Intervals.icu ↗</a></div>` : ''}
+        `;
+        document.getElementById('woModalBtns').innerHTML = `<button style="background:var(--cyan);color:#022c22;font-weight:800;" onclick="closeWoModal()">Done</button>`;
+      } else {
+        alert('Upload failed: ' + uploadRes.error);
+        document.getElementById('woModalBtns').innerHTML = `
+          <button style="background:var(--cyan);color:#022c22;" onclick="retryIntervalsUpload('${rec.id}')">Retry</button>
+          <button style="background:#334155;color:#fff;" onclick="closeWoModal()">Close</button>
+        `;
+      }
     }
     function discardWorkoutUI() {
       if (wo.st === 0) return;
@@ -1174,7 +1326,17 @@
     }
 
     // Modal Handlers
-    function openSettings() { document.getElementById('settingsModal').classList.add('active'); }
+    function openSettings() {
+      document.getElementById('cfgHRmax').value = userHRmax;
+      document.getElementById('cfg4x4Work').value = target4x4Work;
+      document.getElementById('cfg4x4Rest').value = target4x4Rest;
+      document.getElementById('cfgZ2Watts').value = targetZ2;
+      document.getElementById('cfgRatio').value = flywheelRatio.toFixed(2);
+      document.getElementById('cfgIntervalsAthlete').value = localStorage.getItem('ss2k_intervals_athlete_id') || 'i758105';
+      document.getElementById('cfgIntervalsApiKey').value = localStorage.getItem('ss2k_intervals_api_key') || '4d5rn0dcv82roimz7sm6g84g9';
+      document.getElementById('cfgIntervalsAuto').checked = (localStorage.getItem('ss2k_intervals_auto_upload') !== 'false');
+      document.getElementById('settingsModal').classList.add('active');
+    }
     function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
     function saveSettings() {
       userHRmax = parseInt(document.getElementById('cfgHRmax').value) || 180;
@@ -1182,6 +1344,14 @@
       target4x4Rest = parseInt(document.getElementById('cfg4x4Rest').value) || 110;
       targetZ2 = parseInt(document.getElementById('cfgZ2Watts').value) || 145;
       flywheelRatio = parseFloat(document.getElementById('cfgRatio').value) || 3.80;
+      
+      const ath = document.getElementById('cfgIntervalsAthlete').value.trim() || 'i758105';
+      const key = document.getElementById('cfgIntervalsApiKey').value.trim() || '4d5rn0dcv82roimz7sm6g84g9';
+      const auto = document.getElementById('cfgIntervalsAuto').checked;
+      localStorage.setItem('ss2k_intervals_athlete_id', ath);
+      localStorage.setItem('ss2k_intervals_api_key', key);
+      localStorage.setItem('ss2k_intervals_auto_upload', auto ? 'true' : 'false');
+
       sendSS2KCmd(`SET_RATIO:${flywheelRatio.toFixed(3)}`);
       closeSettings();
       if (activeMode === '4x4') build4x4Workout();
@@ -1204,7 +1374,7 @@
 
   <footer style="margin-top: 18px; padding: 12px 4px 6px 4px; text-align: center; font-size: 0.72rem; color: #64748b; font-family: monospace; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
     <span>SS2K SMART COCKPIT</span>
-    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.0 • 2026-11-02 18:56</span>
+    <span id="appRevBadge" style="background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid #1e293b;">Rev v5.1 • 2026-11-02 19:09</span>
   </footer>
 
 </body>
