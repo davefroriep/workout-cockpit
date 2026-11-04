@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <title>SS2K + C7 Calibration Cockpit</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <style>
+    :root {
+      --bg: #000000;
+      --card: #0c0c10;
+      --card-alt: #13131a;
+      --border: #262633;
+      --text: #ffffff;
+      --muted: #9ca3af;
+      --cyan: #00f2fe;
+      --green: #00e676;
+      --amber: #ffb300;
+      --red: #ff3d57;
+      --purple: #b388ff;
+    }
+    body.light-mode {
+      --bg: #f4f5f7;
+      --card: #ffffff;
+      --card-alt: #eceff4;
+      --border: #d0d5dd;
+      --text: #111827;
+      --muted: #4b5563;
+      --cyan: #0077b6;
+      --green: #059669;
+      --amber: #d97706;
+      --red: #dc2626;
+      --purple: #6d28d9;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.45;
+      padding-bottom: 48px;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+    }
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .brand-title {
+      font-size: 1.05rem;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .nav-link:hover, .nav-link:focus-visible {
+      border-color: var(--cyan);
+      outline: none;
+    }
+    .conn-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      min-height: 40px;
+      min-width: 40px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card-alt);
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 700;
+      transition: border-color 0.15s, background-color 0.15s, transform 0.08s;
+    }
+    button:hover:not(:disabled) {
+      border-color: var(--cyan);
+    }
+    button:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .btn-conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-conn.connected {
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .btn-sim.active {
+      border-color: var(--amber);
+      background: rgba(255, 179, 0, 0.14);
+      color: var(--amber);
+    }
+    .btn-primary {
+      background: var(--cyan);
+      color: #000000;
+      border-color: var(--cyan);
+      font-weight: 900;
+    }
+    .btn-danger {
+      background: var(--red);
+      color: #ffffff;
+      border-color: var(--red);
+      font-weight: 900;
+    }
+    .btn-success {
+      background: var(--green);
+      color: #000000;
+      border-color: var(--green);
+      font-weight: 900;
+    }
+    .telem-strip {
+      max-width: 1280px;
+      margin: 8px auto 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+      gap: 6px;
+    }
+    .telem-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    .telem-label {
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .telem-val {
+      font-size: 1.15rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+    main {
+      max-width: 1280px;
+      margin: 14px auto;
+      padding: 0 14px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+    @media (min-width: 980px) {
+      main {
+        grid-template-columns: 1.25fr 1fr;
+        align-items: start;
+      }
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-size: 0.95rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--cyan);
+    }
+    .part-block {
+      margin-bottom: 18px;
+    }
+    .part-block:last-child {
+      margin-bottom: 0;
+    }
+    .part-heading {
+      font-size: 0.82rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .test-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 8px;
+    }
+    .pos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+      gap: 8px;
+    }
+    .test-btn {
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 6px;
+      min-height: 78px;
+      position: relative;
+    }
+    .test-btn.selected {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 1px var(--cyan);
+    }
+    .test-btn.done {
+      border-color: var(--green);
+      background: rgba(0, 230, 118, 0.07);
+    }
+    .test-btn.review {
+      border-color: var(--amber);
+      background: rgba(255, 179, 0, 0.08);
+    }
+    .test-btn-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      width: 100%;
+    }
+    .test-name {
+      font-size: 0.9rem;
+      font-weight: 900;
+      color: var(--text);
+    }
+    .badge {
+      font-size: 0.65rem;
+      font-weight: 900;
+      padding: 2px 6px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .badge-done {
+      background: rgba(0, 230, 118, 0.2);
+      color: var(--green);
+    }
+    .badge-ready {
+      background: rgba(0, 242, 254, 0.16);
+      color: var(--cyan);
+    }
+    .badge-review {
+      background: rgba(255, 179, 0, 0.2);
+      color: var(--amber);
+    }
+    .badge-locked {
+      background: rgba(156, 163, 175, 0.15);
+      color: var(--muted);
+    }
+    .test-meta {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    /* Native progress styling per Modern Web Guidance */
+    progress.cal-progress {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 100%;
+      height: 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background-color: var(--card-alt);
+      overflow: clip;
+      display: block;
+      margin: 10px 0;
+    }
+    progress.cal-progress::-webkit-progress-bar {
+      background-color: var(--card-alt);
+    }
+    progress.cal-progress::-webkit-progress-value {
+      background-color: var(--cyan);
+      transition: inline-size 0.2s ease-out;
+    }
+    progress.cal-progress::-moz-progress-bar {
+      background-color: var(--cyan);
+    }
+    .runner-sticky {
+      position: sticky;
+      top: 128px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .step-list {
+      margin: 8px 0 12px 18px;
+      font-size: 0.83rem;
+      color: var(--muted);
+    }
+    .step-list li {
+      margin-bottom: 4px;
+    }
+    .cadence-coach {
+      background: var(--card-alt);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      margin: 10px 0;
+    }
+    .cadence-coach.in-zone {
+      border-color: var(--green);
+      background: rgba(0, 230, 118, 0.08);
+    }
+    .cadence-coach.out-zone {
+      border-color: var(--amber);
+      background: rgba(255, 179, 0, 0.08);
+    }
+    .coach-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .coach-val {
+      font-size: 1.65rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+    .prompt-card {
+      background: rgba(0, 242, 254, 0.07);
+      border: 1px solid var(--cyan);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 10px 0;
+    }
+    .prompt-title {
+      font-weight: 900;
+      font-size: 0.95rem;
+      color: var(--cyan);
+      margin-bottom: 4px;
+    }
+    .prompt-body {
+      font-size: 0.85rem;
+      color: var(--text);
+      white-space: pre-line;
+      margin-bottom: 10px;
+    }
+    .prompt-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      margin-top: 8px;
+    }
+    .data-table th, .data-table td {
+      border: 1px solid var(--border);
+      padding: 5px 7px;
+      text-align: right;
+    }
+    .data-table th:first-child, .data-table td:first-child {
+      text-align: left;
+    }
+    .data-table th {
+      background: var(--card-alt);
+      color: var(--muted);
+      font-weight: 800;
+    }
+    .manual-jog {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    footer {
+      max-width: 1280px;
+      margin: 24px auto 0;
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    dialog {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--cyan);
+      border-radius: 12px;
+      padding: 18px;
+      max-width: 520px;
+      width: calc(100% - 28px);
+      margin: auto;
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.75);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-top">
+      <div class="brand-group">
+        <span class="brand-title">SS2K Calibration Cockpit</span>
+        <a class="nav-link" href="index.html">← Workout Cockpit</a>
+        <a class="nav-link" href="tuner.html">Tuner</a>
+      </div>
+      <div class="conn-bar">
+        <button id="btnPairSS2K" type="button" class="btn-conn">PAIR SS2K</button>
+        <button id="btnPairC7" type="button" class="btn-conn">PAIR C7 CONSOLE</button>
+        <button id="btnSimToggle" type="button" class="btn-sim active">DEMO SIM: ON (15x)</button>
+        <button id="btnSimSpeed" type="button" title="Toggle Simulator Speed">15x FAST</button>
+        <button id="btnTheme" type="button" title="Toggle Light/Black Mode">☀/☾</button>
+      </div>
+    </div>
+    <div class="telem-strip" aria-label="Live Bike Telemetry">
+      <div class="telem-box">
+        <span class="telem-label">Pot ADC (Span %)</span>
+        <span class="telem-val" id="telPot">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">Stepper Pos</span>
+        <span class="telem-val" id="telPos">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">StallGuard</span>
+        <span class="telem-val" id="telSG">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">SS2K Cadence</span>
+        <span class="telem-val" id="telSS2KCad">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">C7 Cadence</span>
+        <span class="telem-val" id="telC7Cad">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">C7 Level</span>
+        <span class="telem-val" id="telC7Lvl">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">C7 Watts</span>
+        <span class="telem-val" id="telC7W" style="color:var(--cyan);">--</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT COLUMN: Modular Bite-Sized Test Matrix -->
+    <section class="panel" aria-labelledby="matrixHeading">
+      <div class="panel-header">
+        <h1 class="panel-title" id="matrixHeading">Modular Calibration Steps (Click Any Step)</h1>
+        <span id="overallSummaryBadge" class="badge badge-ready">0 / 21 Completed</span>
+      </div>
+      <p style="font-size:0.83rem; color:var(--muted); margin-bottom:14px;">
+        Each test takes <strong>4 to 8 minutes</strong> and saves automatically. Run Part A on the bench (no rider), Part B to verify C7 timing &amp; range, then click any <strong>Pot % button</strong> in Part C whenever you want to log a position.
+      </p>
+
+      <div id="testSectionsContainer"></div>
+
+      <!-- Manual Jog & Quick Position Bar -->
+      <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+        <div class="part-heading">
+          <span>Manual Stepper &amp; Potentiometer Park Controls</span>
+          <span id="rangeStatusLabel" style="font-size:0.75rem; color:var(--cyan);">Not Homed Yet</span>
+        </div>
+        <div class="manual-jog">
+          <button type="button" data-jog="-2000">-2000 steps</button>
+          <button type="button" data-jog="-500">-500 steps</button>
+          <button type="button" data-jog="500">+500 steps</button>
+          <button type="button" data-jog="2000">+2000 steps</button>
+          <button type="button" id="btnEmergencyStopTop" class="btn-danger">⏹ E-STOP MOTOR</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Active Guided Test Runner + Live Fitted 2D Surface -->
+    <div class="runner-sticky">
+      <section class="panel" aria-labelledby="runnerHeading">
+        <div class="panel-header">
+          <h2 class="panel-title" id="runnerHeading">Selected Test Walkthrough</h2>
+          <span id="activeTestBadge" class="badge badge-ready">READY</span>
+        </div>
+
+        <div id="activeTestContent">
+          <h3 id="selTitle" style="font-size:1.15rem; font-weight:900; margin-bottom:4px;">Select a test button</h3>
+          <p id="selBlurb" style="font-size:0.84rem; color:var(--muted); margin-bottom:8px;"></p>
+          <ul id="selSteps" class="step-list"></ul>
+
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin:12px 0;">
+            <button type="button" id="btnStartTest" class="btn-primary">▶ START THIS TEST</button>
+            <button type="button" id="btnStopTest" class="btn-danger" disabled>⏹ STOP / ABORT</button>
+            <button type="button" id="btnResetTest">↺ Clear Result</button>
+          </div>
+
+          <label for="testProgressBar" id="progressLabel" style="font-size:0.75rem; color:var(--muted); font-weight:700; display:flex; justify-content:space-between;">
+            <span id="statusPolite" role="status" aria-live="polite">Idle — ready when you are.</span>
+            <span id="timerDisplay"></span>
+          </label>
+          <progress id="testProgressBar" class="cal-progress" value="0" max="1"></progress>
+
+          <!-- Cadence Coach (shown when rider cadence target is active) -->
+          <div id="cadenceCoach" class="cadence-coach" style="display:none;">
+            <div style="font-size:0.75rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted);" id="coachHeader">
+              HOLD TARGET CADENCE
+            </div>
+            <div class="coach-grid">
+              <div>
+                <div class="telem-label">TARGET RPM</div>
+                <div class="coach-val" id="coachTarget" style="color:var(--cyan);">80</div>
+              </div>
+              <div>
+                <div class="telem-label">YOUR RPM</div>
+                <div class="coach-val" id="coachActual">--</div>
+              </div>
+              <div>
+                <div class="telem-label">C7 WATTS</div>
+                <div class="coach-val" id="coachWatts">--</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive Guided Step Prompt -->
+          <div id="promptBox" class="prompt-card" style="display:none;">
+            <div class="prompt-title" id="promptTitle"></div>
+            <div class="prompt-body" id="promptBody"></div>
+            <div class="prompt-actions" id="promptActions"></div>
+          </div>
+
+          <!-- Test Result Summary Container -->
+          <div id="resultSummaryBox" style="margin-top:12px;"></div>
+        </div>
+      </section>
+
+      <!-- Live 2D Wattage Surface & Firmware Export Panel -->
+      <section class="panel" aria-labelledby="surfaceHeading">
+        <div class="panel-header">
+          <h2 class="panel-title" id="surfaceHeading">Calibrated 2D Wattage Table &amp; Export</h2>
+          <span id="surfaceBadge" class="badge badge-locked">Awaiting Grid Data</span>
+        </div>
+
+        <div id="surfaceSolverBox" style="display:none; margin-bottom:10px; padding:10px; background:var(--card-alt); border-radius:8px; border:1px solid var(--border);">
+          <div style="font-size:0.76rem; font-weight:800; color:var(--cyan); margin-bottom:6px; text-transform:uppercase;">
+            Interactive Target Pot Solver Preview
+          </div>
+          <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:0.82rem;">
+            <label>Target Watts:
+              <input id="inpSolveW" type="number" value="200" min="20" max="1000" step="5" style="width:72px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-weight:800;">
+            </label>
+            <label>@ Cadence:
+              <input id="inpSolveRPM" type="number" value="85" min="45" max="120" step="1" style="width:64px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-weight:800;">
+            </label>
+            <span id="solveResultText" style="font-weight:900; color:var(--green);"></span>
+          </div>
+        </div>
+
+        <div id="surfaceTableContainer" style="overflow-x:auto;">
+          <p style="font-size:0.8rem; color:var(--muted);">Complete at least two Part C position buttons (e.g. <strong>0%</strong> and <strong>30%</strong>) to generate the live 2D Wattage Lookup Table.</p>
+        </div>
+
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+          <button type="button" id="btnExportJson">⬇ Download JSON</button>
+          <button type="button" id="btnImportJson">⬆ Import JSON</button>
+          <button type="button" id="btnExportHeader" class="btn-success">⬇ Export power_table.h</button>
+          <button type="button" id="btnResetAll" style="margin-left:auto; color:var(--red);">Reset All</button>
+          <input type="file" id="fileImportInput" accept=".json" style="display:none;">
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="headerModal">
+    <div class="panel-header">
+      <h3 class="panel-title">Generated C++ Firmware Header (ss2k_calibrated_model.h)</h3>
+      <button type="button" id="btnCloseModal">Close</button>
+    </div>
+    <textarea id="headerCodeArea" readonly style="width:100%; height:320px; background:var(--bg); color:var(--green); border:1px solid var(--border); border-radius:8px; padding:10px; font-family:monospace; font-size:0.76rem;"></textarea>
+    <div style="display:flex; gap:8px; margin-top:10px; justify-content:flex-end;">
+      <button type="button" id="btnCopyHeader" class="btn-primary">Copy C++ Header</button>
+      <button type="button" id="btnDownloadHeaderFile" class="btn-success">Download .h File</button>
+    </div>
+  </dialog>
+
+  <footer>
+    <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
+    <span>Rev v6.7 • 2026-11-04 06:30</span>
+  </footer>
+
+  <script src="cal-core.js"></script>
+  <script src="cal-sim.js"></script>
+  <script src="cal-tests.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const STORAGE_KEY = 'ss2k_cal_cockpit_v1';
+      const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+      const NUS_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+      const NUS_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+      const FTMS_SERVICE = 0x1826;
+      const FTMS_BIKE_DATA = 0x2ad2;
+
+      let store = loadStore();
+      let selectedTestId = 'home';
+      let activeCtx = null;
+      let runningTestId = null;
+
+      // Demo simulator state
+      let simMode = true;
+      let simFast = true; // 15x fast forward in demo mode
+      let sim = new SimBike({ lash: 420, flop: 95 });
+
+      // Live BLE state
+      let ss2kTxChar = null;
+      let latestSS2K = null;
+      let latestC7 = null;
+
+      function loadStore() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (!parsed.tests) parsed.tests = {};
+            return parsed;
+          }
+        } catch (e) { console.warn('Could not parse saved store', e); }
+        return { tests: {}, range: null, potmap: null };
+      }
+
+      function saveStore() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        } catch (e) { console.warn('Could not save store to localStorage', e); }
+      }
+
+      // Hook up simulator callbacks
+      function bindSim() {
+        sim.onSS2K = d => {
+          latestSS2K = d;
+          if (activeCtx && simMode) activeCtx.feed('ss2k', d);
+          updateTelemetryStrip();
+        };
+        sim.onC7 = d => {
+          latestC7 = d;
+          if (activeCtx && simMode) activeCtx.feed('c7', d);
+          updateTelemetryStrip();
+        };
+        sim.advance(1000);
+      }
+      bindSim();
+
+      // Background tick for simulator when no test is sleeping
+      setInterval(() => {
+        if (simMode && !runningTestId) {
+          sim.advance(250);
+        }
+      }, 250);
+
+      function updateTelemetryStrip() {
+        const s = latestSS2K;
+        const c = latestC7;
+        if (s) {
+          let pctTxt = '';
+          if (store.range && isFinite(store.range.potLight) && isFinite(store.range.potHeavy)) {
+            const pct = ((s.pot - store.range.potLight) / Math.max(1, store.range.potHeavy - store.range.potLight)) * 100;
+            pctTxt = ` (${CalCore.clamp(pct, 0, 100).toFixed(0)}%)`;
+          }
+          document.getElementById('telPot').textContent = `${s.pot}${pctTxt}`;
+          document.getElementById('telPos').textContent = s.pos;
+          document.getElementById('telSG').textContent = s.sg;
+          document.getElementById('telSS2KCad').textContent = `${Number(s.cad || 0).toFixed(0)} rpm`;
+        }
+        if (c) {
+          document.getElementById('telC7Cad').textContent = `${Number(c.cadence || 0).toFixed(0)} rpm`;
+          document.getElementById('telC7Lvl').textContent = c.resistance ?? '--';
+          document.getElementById('telC7W').textContent = `${ c.watts ?? '--' } W`;
+        }
+        if (store.range) {
+          document.getElementById('rangeStatusLabel').textContent =
+            `Safe Span: ${store.range.safeMin}..${store.range.safeMax} steps (${store.range.potLight}..${store.range.potHeavy} ADC)`;
+        } else {
+          document.getElementById('rangeStatusLabel').textContent = 'Not Homed Yet (Run A1 First)';
+        }
+      }
+
+      // Check prerequisites for a test
+      function prereqsMet(test) {
+        if (!test.needs || !test.needs.length) return true;
+        return test.needs.every(reqId => {
+          if (reqId === 'home' && store.range) return true;
+          if (reqId === 'potmap' && store.potmap) return true;
+          const st = store.tests?.[reqId]?.status;
+          return st === 'done' || st === 'review';
+        });
+      }
+
+      function renderTestMatrix() {
+        const container = document.getElementById('testSectionsContainer');
+        container.innerHTML = '';
+
+        let doneCount = 0;
+        CalTests.TESTS.forEach(t => {
+          const st = store.tests?.[t.id]?.status;
+          if (st === 'done') doneCount++;
+        });
+        const badgeAll = document.getElementById('overallSummaryBadge');
+        badgeAll.textContent = `${doneCount} / ${CalTests.TESTS.length} Completed`;
+        badgeAll.className = 'badge ' + (doneCount === CalTests.TESTS.length ? 'badge-done' : 'badge-ready');
+
+        const partsOrder = ['A', 'B', 'C', 'D'];
+        for (const partKey of partsOrder) {
+          const testsInPart = CalTests.TESTS.filter(t => t.part === partKey);
+          const block = document.createElement('div');
+          block.className = 'part-block';
+
+          const heading = document.createElement('div');
+          heading.className = 'part-heading';
+          const partDone = testsInPart.filter(t => store.tests?.[t.id]?.status === 'done').length;
+          heading.innerHTML = `<span>${CalTests.PARTS[partKey]}</span><span>${partDone}/${testsInPart.length} done</span>`;
+          block.appendChild(heading);
+
+          const grid = document.createElement('div');
+          grid.className = partKey === 'C' ? 'pos-grid' : 'test-grid';
+
+          for (const t of testsInPart) {
+            const saved = store.tests?.[t.id];
+            const unlocked = prereqsMet(t);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'test-btn' +
+              (selectedTestId === t.id ? ' selected' : '') +
+              (saved?.status === 'done' ? ' done' : '') +
+              (saved?.status === 'review' ? ' review' : '');
+
+            let badgeClass = 'badge-locked', badgeText = 'LOCKED';
+            if (saved?.status === 'done') { badgeClass = 'badge-done'; badgeText = 'DONE ✓'; }
+            else if (saved?.status === 'review') { badgeClass = 'badge-review'; badgeText = 'REVIEW'; }
+            else if (unlocked) { badgeClass = 'badge-ready'; badgeText = 'READY'; }
+
+            let metaLine = `~${t.minutes} min • ${t.rider ? 'Rider' : 'No Rider'}`;
+            if (partKey === 'C' && saved?.summary?.results?.length) {
+              const r80 = saved.summary.results.find(r => Math.abs(r.cad - 80) <= 5) || saved.summary.results[0];
+              metaLine = `${r80.watts}W @ ${r80.cad}rpm (${r80.pot} ADC)`;
+            } else if (t.id === 'home' && saved?.summary?.potSpan) {
+              metaLine = `Span: ${saved.summary.potSpan} ADC (${saved.summary.travel} stp)`;
+            }
+
+            btn.innerHTML = `
+              <div class="test-btn-top">
+                <span class="test-name">${t.title}</span>
+                <span class="badge ${badgeClass}">${badgeText}</span>
+              </div>
+              <div class="test-meta">${metaLine}</div>
+            `;
+            btn.addEventListener('click', () => {
+              selectedTestId = t.id;
+              renderTestMatrix();
+              renderSelectedTestPanel();
+            });
+            grid.appendChild(btn);
+          }
+          block.appendChild(grid);
+          container.appendChild(block);
+        }
+      }
+
+      function renderSelectedTestPanel() {
+        const t = CalTests.TESTS.find(x => x.id === selectedTestId) || CalTests.TESTS[0];
+        const saved = store.tests?.[t.id];
+        const unlocked = prereqsMet(t);
+
+        document.getElementById('selTitle').textContent = `${t.title} (~${t.minutes} min)`;
+        document.getElementById('selBlurb').textContent = t.blurb;
+
+        const ul = document.getElementById('selSteps');
+        ul.innerHTML = '';
+        (t.steps || []).forEach(s => {
+          const li = document.createElement('li');
+          li.textContent = s;
+          ul.appendChild(li);
+        });
+
+        const badge = document.getElementById('activeTestBadge');
+        if (runningTestId === t.id) {
+          badge.className = 'badge badge-ready';
+          badge.textContent = 'RUNNING...';
+        } else if (saved?.status === 'done') {
+          badge.className = 'badge badge-done';
+          badge.textContent = 'COMPLETED ✓';
+        } else if (saved?.status === 'review') {
+          badge.className = 'badge badge-review';
+          badge.textContent = 'NEEDS REVIEW';
+        } else if (unlocked) {
+          badge.className = 'badge badge-ready';
+          badge.textContent = 'READY';
+        } else {
+          badge.className = 'badge badge-locked';
+          badge.textContent = `NEEDS: ${t.needs.join(', ').toUpperCase()}`;
+        }
+
+        document.getElementById('btnStartTest').disabled = Boolean(runningTestId) || !unlocked;
+        document.getElementById('btnStartTest').textContent = saved?.status === 'done' ? '▶ RE-RUN THIS TEST' : '▶ START THIS TEST';
+        document.getElementById('btnStopTest').disabled = !runningTestId;
+        document.getElementById('btnResetTest').disabled = Boolean(runningTestId) || !saved;
+
+        renderSummaryTable(t.id, saved);
+      }
+
+      function renderSummaryTable(testId, saved) {
+        const box = document.getElementById('resultSummaryBox');
+        if (!saved || !saved.summary) {
+          box.innerHTML = '';
+          return;
+        }
+        const s = saved.summary;
+        let html = `<div style="padding:10px; background:var(--card-alt); border:1px solid var(--border); border-radius:8px;">
+          <div style="font-size:0.78rem; font-weight:900; color:var(--green); text-transform:uppercase; margin-bottom:6px;">
+            Saved Result Summary (${new Date(saved.at || Date.now()).toLocaleTimeString()})
+          </div>`;
+
+        if (s.results && Array.isArray(s.results)) {
+          html += `<table class="data-table">
+            <thead><tr><th>Pos %</th><th>Target RPM</th><th>Actual RPM</th><th>C7 Watts</th><th>Pot ADC</th><th>C7 Lvl</th><th>QC</th></tr></thead>
+            <tbody>` +
+            s.results.map(r => `<tr>
+              <td>${Math.round(r.frac * 100)}%</td>
+              <td>${r.cad}</td>
+              <td>${r.c7Cad}</td>
+              <td style="font-weight:900; color:var(--cyan);">${r.watts} W</td>
+              <td>${r.pot}</td>
+              <td>${r.level}</td>
+              <td style="color:${r.pass ? 'var(--green)' : 'var(--amber)'};">${r.pass ? 'PASS ✓' : (r.why || []).join(', ')}</td>
+            </tr>`).join('') +
+            `</tbody></table>`;
+        } else if (s.table && Array.isArray(s.table)) {
+          const cols = Object.keys(s.table[0] || {});
+          html += `<table class="data-table"><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>` +
+            s.table.map(row => `<tr>${cols.map(c => `<td>${row[c]}</td>`).join('')}</tr>`).join('') +
+            `</tbody></table>`;
+          if (s.verdict) html += `<p style="font-size:0.8rem; color:var(--cyan); margin-top:6px; font-weight:700;">${s.verdict}</p>`;
+        } else {
+          const kv = Object.entries(s).filter(([, v]) => typeof v !== 'object');
+          html += `<table class="data-table"><tbody>` +
+            kv.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('') +
+            `</tbody></table>`;
+        }
+        html += `</div>`;
+        box.innerHTML = html;
+      }
+
+      function renderSurfacePanel() {
+        const surf = CalCore.fitPowerSurface(store);
+        const badge = document.getElementById('surfaceBadge');
+        const container = document.getElementById('surfaceTableContainer');
+        const solverBox = document.getElementById('surfaceSolverBox');
+
+        if (!surf.ok) {
+          badge.className = 'badge badge-locked';
+          badge.textContent = `${surf.count || 0} plateaus`;
+          solverBox.style.display = 'none';
+          container.innerHTML = `<p style="font-size:0.8rem; color:var(--muted);">${surf.message}</p>`;
+          return;
+        }
+
+        badge.className = 'badge badge-done';
+        badge.textContent = `${surf.testedPositions}/11 Pos • ${surf.totalPlateaus} Plateaus`;
+        solverBox.style.display = 'block';
+
+        const updateSolver = () => {
+          const w = Number(document.getElementById('inpSolveW').value) || 200;
+          const rpm = Number(document.getElementById('inpSolveRPM').value) || 85;
+          const res = surf.solveTargetFrac(w, rpm);
+          document.getElementById('solveResultText').textContent =
+            `→ ${(res.frac * 100).toFixed(1)}% Travel • Target Pot: ${res.pot} ADC (${res.expectedWatts} W)`;
+        };
+        document.getElementById('inpSolveW').oninput = updateSolver;
+        document.getElementById('inpSolveRPM').oninput = updateSolver;
+        updateSolver();
+
+        let evalBanner = '';
+        if (surf.holdoutEval) {
+          evalBanner += `<div style="font-size:0.78rem; color:var(--green); font-weight:800; margin-bottom:6px;">
+            Holdout Validation: MAE = ${surf.holdoutEval.maeW} W (Max ${surf.holdoutEval.maxAbsW} W, MAPE ${surf.holdoutEval.mapePct}%)
+          </div>`;
+        }
+        if (surf.downEval) {
+          evalBanner += `<div style="font-size:0.78rem; color:var(--cyan); font-weight:800; margin-bottom:6px;">
+            Down-Pass Hysteresis Check: MAE = ${surf.downEval.maeW} W (${surf.downEval.mapePct}%)
+          </div>`;
+        }
+
+        let html = evalBanner + `<table class="data-table">
+          <thead>
+            <tr>
+              <th>Pot % (ADC)</th>
+              ${surf.rpmGrid.map(r => `<th>${r} rpm</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>`;
+
+        surf.fracGrid.forEach((f, i) => {
+          const pct = Math.round(f * 100);
+          const tested = store.tests?.['g' + pct]?.status === 'done';
+          html += `<tr style="${tested ? 'font-weight:800;' : 'opacity:0.75;'}">
+            <td>${pct}% (${surf.potLut[i]}) ${tested ? '✓' : ''}</td>
+            ${surf.table[i].map(w => `<td>${w.toFixed(0)}W</td>`).join('')}
+          </tr>`;
+        });
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+      }
+
+      // Send command to SS2K (real BLE or simulator)
+      function sendCommand(cmd) {
+        if (simMode) {
+          sim.send(cmd);
+          return;
+        }
+        if (ss2kTxChar) {
+          const enc = new TextEncoder().encode(cmd + '\n');
+          ss2kTxChar.writeValueWithoutResponse(enc).catch(err => console.warn('BLE write err:', err));
+        }
+      }
+
+      // Execute a test interactively
+      async function startSelectedTest() {
+        const t = CalTests.TESTS.find(x => x.id === selectedTestId);
+        if (!t || runningTestId) return;
+
+        runningTestId = t.id;
+        renderSelectedTestPanel();
+        const prog = document.getElementById('testProgressBar');
+        prog.value = 0;
+
+        const ui = {
+          say(title, body) {
+            const box = document.getElementById('promptBox');
+            box.style.display = 'block';
+            document.getElementById('promptTitle').textContent = title;
+            document.getElementById('promptBody').textContent = body || '';
+            document.getElementById('promptActions').innerHTML = '';
+          },
+          ask(title, body, buttons) {
+            return new Promise(resolve => {
+              const box = document.getElementById('promptBox');
+              box.style.display = 'block';
+              document.getElementById('promptTitle').textContent = title;
+              document.getElementById('promptBody').textContent = body || '';
+              const act = document.getElementById('promptActions');
+              act.innerHTML = '';
+              (buttons || [{ id: 'ok', label: 'Continue' }]).forEach((b, idx) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = idx === 0 ? 'btn-primary' : '';
+                btn.textContent = b.label;
+                btn.onclick = () => {
+                  box.style.display = 'none';
+                  resolve(b.id);
+                };
+                act.appendChild(btn);
+              });
+            });
+          },
+          status(txt) {
+            document.getElementById('statusPolite').textContent = txt;
+          },
+          progress(frac) {
+            prog.value = CalCore.clamp(Number(frac) || 0, 0, 1);
+          },
+          timer(sec) {
+            document.getElementById('timerDisplay').textContent = sec > 0 ? `${Math.ceil(sec)}s` : '';
+          },
+          phase(txt) {
+            document.getElementById('coachHeader').textContent = txt ? `PHASE: ${txt.toUpperCase()}` : 'HOLD TARGET CADENCE';
+          },
+          beep() {},
+          note(txt) {
+            document.getElementById('statusPolite').textContent = txt;
+          },
+          cadTarget(rpm) {
+            const coach = document.getElementById('cadenceCoach');
+            if (rpm && rpm > 0) {
+              coach.style.display = 'block';
+              document.getElementById('coachTarget').textContent = rpm;
+              if (simMode) sim.setRider(rpm);
+            } else {
+              coach.style.display = 'none';
+              if (simMode) sim.setRider(0);
+            }
+          }
+        };
+
+        activeCtx = CalTests.makeCtx({
+          now: () => simMode ? sim.t : Date.now(),
+          sleep: async ms => {
+            if (simMode) {
+              const chunk = simFast ? 250 : 50;
+              let rem = ms;
+              while (rem > 0) {
+                if (activeCtx && activeCtx.aborted) break;
+                const step = Math.min(rem, chunk);
+                sim.advance(step);
+                rem -= step;
+                updateCoachLive();
+                await new Promise(r => setTimeout(r, simFast ? 4 : step));
+              }
+            } else {
+              const tEnd = Date.now() + ms;
+              while (Date.now() < tEnd) {
+                if (activeCtx && activeCtx.aborted) break;
+                updateCoachLive();
+                await new Promise(r => setTimeout(r, 80));
+              }
+            }
+          },
+          send: cmd => sendCommand(cmd),
+          ui,
+          store
+        });
+
+        // Prime current telemetry into activeCtx
+        if (latestSS2K) activeCtx.feed('ss2k', latestSS2K);
+        if (latestC7) activeCtx.feed('c7', latestC7);
+
+        try {
+          const res = await t.run(activeCtx);
+          store.tests[t.id] = {
+            status: res.status,
+            summary: res.summary,
+            at: Date.now()
+          };
+          saveStore();
+          ui.status(`${t.title} finished (${res.status.toUpperCase()}).`);
+          prog.value = 1;
+        } catch (err) {
+          ui.status(err.name === 'AbortError' ? `${t.title} stopped by user.` : `Error: ${err.message}`);
+        } finally {
+          document.getElementById('promptBox').style.display = 'none';
+          document.getElementById('cadenceCoach').style.display = 'none';
+          document.getElementById('timerDisplay').textContent = '';
+          runningTestId = null;
+          activeCtx = null;
+          renderTestMatrix();
+          renderSelectedTestPanel();
+          renderSurfacePanel();
+          updateTelemetryStrip();
+        }
+      }
+
+      function updateCoachLive() {
+        const coach = document.getElementById('cadenceCoach');
+        if (coach.style.display === 'none') return;
+        const target = Number(document.getElementById('coachTarget').textContent) || 0;
+        const actual = latestC7?.cadence ?? latestSS2K?.cad ?? 0;
+        const watts = latestC7?.watts ?? '--';
+        document.getElementById('coachActual').textContent = Number(actual).toFixed(0);
+        document.getElementById('coachWatts').textContent = watts;
+        const diff = Math.abs(actual - target);
+        coach.className = 'cadence-coach ' + (diff <= 3.5 ? 'in-zone' : 'out-zone');
+      }
+
+      // Wire UI Buttons
+      document.getElementById('btnStartTest').addEventListener('click', startSelectedTest);
+      document.getElementById('btnStopTest').addEventListener('click', () => {
+        if (activeCtx) {
+          activeCtx.aborted = true;
+          sendCommand('STOP');
+        }
+      });
+      document.getElementById('btnEmergencyStopTop').addEventListener('click', () => {
+        if (activeCtx) activeCtx.aborted = true;
+        sendCommand('STOP');
+        document.getElementById('statusPolite').textContent = 'EMERGENCY STOP SENT TO STEPPER.';
+      });
+      document.getElementById('btnResetTest').addEventListener('click', () => {
+        if (runningTestId) return;
+        delete store.tests[selectedTestId];
+        if (selectedTestId === 'home') store.range = null;
+        if (selectedTestId === 'potmap') store.potmap = null;
+        saveStore();
+        renderTestMatrix();
+        renderSelectedTestPanel();
+        renderSurfacePanel();
+      });
+
+      document.querySelectorAll('[data-jog]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const steps = Number(btn.getAttribute('data-jog'));
+          sendCommand('SET_SPEED:1500');
+          sendCommand('JOG:' + steps);
+          if (simMode) sim.advance(1600);
+        });
+      });
+
+      // Simulator Toggles
+      const btnSimToggle = document.getElementById('btnSimToggle');
+      const btnSimSpeed = document.getElementById('btnSimSpeed');
+      function updateSimButtons() {
+        btnSimToggle.className = 'btn-sim' + (simMode ? ' active' : '');
+        btnSimToggle.textContent = simMode ? `DEMO SIM: ON (${simFast ? '15x' : '1x'})` : 'DEMO SIM: OFF (REAL BIKE)';
+        btnSimSpeed.style.display = simMode ? 'inline-flex' : 'none';
+        btnSimSpeed.textContent = simFast ? '15x FAST' : '1x REALTIME';
+      }
+      btnSimToggle.addEventListener('click', () => {
+        simMode = !simMode;
+        updateSimButtons();
+      });
+      btnSimSpeed.addEventListener('click', () => {
+        simFast = !simFast;
+        updateSimButtons();
+      });
+
+      // BLE Pairing for Real Bike
+      document.getElementById('btnPairSS2K').addEventListener('click', async () => {
+        try {
+          const dev = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [NUS_SERVICE] }, { namePrefix: 'SS2K' }],
+            optionalServices: [NUS_SERVICE]
+          });
+          const server = await dev.gatt.connect();
+          const service = await server.getPrimaryService(NUS_SERVICE);
+          ss2kTxChar = await service.getCharacteristic(NUS_TX);
+          const rxChar = await service.getCharacteristic(NUS_RX);
+          await rxChar.startNotifications();
+          let buf = '';
+          rxChar.addEventListener('characteristicvaluechanged', e => {
+            buf += new TextDecoder().decode(e.target.value);
+            const lines = buf.split('\n');
+            buf = lines.pop();
+            for (const line of lines) {
+              const parsed = CalCore.parseSS2KLine(line.trim());
+              if (parsed) {
+                latestSS2K = parsed;
+                if (activeCtx && !simMode) activeCtx.feed('ss2k', parsed);
+                updateTelemetryStrip();
+              }
+            }
+          });
+          simMode = false;
+          updateSimButtons();
+          const btn = document.getElementById('btnPairSS2K');
+          btn.classList.add('connected');
+          btn.textContent = 'SS2K CONNECTED ✓';
+        } catch (err) {
+          document.getElementById('statusPolite').textContent = 'SS2K BLE connection cancelled or failed: ' + err.message;
+        }
+      });
+
+      document.getElementById('btnPairC7').addEventListener('click', async () => {
+        try {
+          const dev = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'Bowflex' }, { namePrefix: 'JRNY' }, { namePrefix: 'C7' }],
+            optionalServices: [FTMS_SERVICE]
+          });
+          const server = await dev.gatt.connect();
+          const service = await server.getPrimaryService(FTMS_SERVICE);
+          const char = await service.getCharacteristic(FTMS_BIKE_DATA);
+          await char.startNotifications();
+          char.addEventListener('characteristicvaluechanged', e => {
+            const parsed = CalCore.parseFtms(e.target.value);
+            if (parsed) {
+              latestC7 = parsed;
+              if (activeCtx && !simMode) activeCtx.feed('c7', parsed);
+              updateTelemetryStrip();
+            }
+          });
+          simMode = false;
+          updateSimButtons();
+          const btn = document.getElementById('btnPairC7');
+          btn.classList.add('connected');
+          btn.textContent = 'C7 CONNECTED ✓';
+        } catch (err) {
+          document.getElementById('statusPolite').textContent = 'C7 BLE connection cancelled or failed: ' + err.message;
+        }
+      });
+
+      // Theme Toggle
+      document.getElementById('btnTheme').addEventListener('click', () => {
+        document.body.classList.toggle('light-mode');
+      });
+
+      // Export / Import / Header Modal
+      document.getElementById('btnExportJson').addEventListener('click', () => {
+        const surf = CalCore.fitPowerSurface(store);
+        const payload = JSON.stringify({ exportedAt: new Date().toISOString(), store, surface: surf.ok ? { potLut: surf.potLut, rpmGrid: surf.rpmGrid, table: surf.table } : null }, null, 2);
+        const blob = new Blob([payload], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `ss2k_c7_calibration_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+      });
+
+      document.getElementById('btnImportJson').addEventListener('click', () => {
+        document.getElementById('fileImportInput').click();
+      });
+      document.getElementById('fileImportInput').addEventListener('change', e => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result);
+            store = parsed.store || parsed;
+            saveStore();
+            renderTestMatrix();
+            renderSelectedTestPanel();
+            renderSurfacePanel();
+            updateTelemetryStrip();
+            document.getElementById('statusPolite').textContent = 'Calibration JSON imported.';
+          } catch (err) {
+            document.getElementById('statusPolite').textContent = 'Invalid JSON file.';
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      const headerModal = document.getElementById('headerModal');
+      document.getElementById('btnExportHeader').addEventListener('click', () => {
+        const surf = CalCore.fitPowerSurface(store);
+        const code = CalCore.exportFirmwareHeader(store, surf.ok ? surf : null);
+        document.getElementById('headerCodeArea').value = code;
+        headerModal.showModal();
+      });
+      document.getElementById('btnCloseModal').addEventListener('click', () => headerModal.close());
+      document.getElementById('btnCopyHeader').addEventListener('click', () => {
+        navigator.clipboard.writeText(document.getElementById('headerCodeArea').value);
+        document.getElementById('btnCopyHeader').textContent = 'Copied ✓';
+        setTimeout(() => { document.getElementById('btnCopyHeader').textContent = 'Copy C++ Header'; }, 1500);
+      });
+      document.getElementById('btnDownloadHeaderFile').addEventListener('click', () => {
+        const blob = new Blob([document.getElementById('headerCodeArea').value], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'ss2k_calibrated_model.h';
+        a.click();
+      });
+
+      document.getElementById('btnResetAll').addEventListener('click', () => {
+        if (runningTestId) return;
+        if (confirm('Clear all saved calibration test results and start fresh?')) {
+          store = { tests: {}, range: null, potmap: null };
+          saveStore();
+          renderTestMatrix();
+          renderSelectedTestPanel();
+          renderSurfacePanel();
+          updateTelemetryStrip();
+        }
+      });
+
+      // Initial render
+      renderTestMatrix();
+      renderSelectedTestPanel();
+      renderSurfacePanel();
+      updateTelemetryStrip();
+    })();
+  </script>
+</body>
+</html>
