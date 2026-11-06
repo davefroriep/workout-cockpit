@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ss2k-cockpit-v30';
+const CACHE_NAME = 'ss2k-cockpit-v31';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
   './cal-core.js',
   './cal-sim.js',
   './cal-tests.js',
+  './cal_store_homed.json',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
