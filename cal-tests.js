@@ -6,8 +6,8 @@
   const C = root.CalCore || (typeof require !== 'undefined' ? require('./cal-core.js') : null);
 
   const K = {
-    HOME_MA: 650, HOME_FAST: 1200, HOME_SLOW: 300, BACKOFF: 1500, MARGIN: 200, SLIP_SEC: 0.6,
-    STEP_SPEED: 1500, SETTLE_MS: 700, GUARD_RPM: 40, GUARD_DROP: 7700, OVERSHOOT: 900, EXPECTED_TRAVEL: 49640
+    HOME_MA: 750, HOME_FAST: 1500, HOME_SLOW: 400, BACKOFF: 600, MARGIN: 200, SLIP_SEC: 0.02,
+    STEP_SPEED: 1500, SETTLE_MS: 700, GUARD_RPM: 40, GUARD_DROP: 7700, OVERSHOOT: 900, EXPECTED_TRAVEL: 47069
   };
   class AbortError extends Error { constructor() { super('Test aborted'); this.name = 'AbortError'; } }
 
@@ -164,7 +164,7 @@
   }
   async function runHome(ctx) {
     await ctx.ui.ask('Before the sled moves', 'Nobody on the bike. Make sure the sled is free to travel. The motor will run at low current until it stalls at each end, three times in each direction. About 5 minutes.', [{ id: 'go', label: 'Start homing' }]);
-    ctx.send('AUTO_STOP:1'); ctx.send('SET_MA:' + K.HOME_MA); await ctx.sleep(500);
+    ctx.send('AUTO_STOP:1'); ctx.send('STALL_THRS:85'); ctx.send('SET_MA:' + K.HOME_MA); await ctx.sleep(500);
     const lights = [], heavies = [], slipEst = Math.round(K.SLIP_SEC * K.HOME_SLOW);
     for (let i = 0; i < 3; i++) {
       ctx.ui.say(`Homing cycle ${i + 1} of 3`, 'Finding the LIGHT end (stall), then the HEAVY end.'); ctx.ui.progress(i / 3);
