@@ -80,7 +80,7 @@
   };
 
   // ---------- analyses ----------
-  Core.analyzeHoming = function ({ lights, heavies, expectedTravel = 49640 }) {
+  Core.analyzeHoming = function ({ lights, heavies, expectedTravel = 43944 }) {
     const warn = [];
     const lp = lights.map(x => x.pos), hp = heavies.map(x => x.pos);
     const lpot = lights.map(x => x.pot), hpot = heavies.map(x => x.pot);

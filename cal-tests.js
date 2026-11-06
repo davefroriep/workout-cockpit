@@ -7,7 +7,7 @@
 
   const K = {
     HOME_MA: 750, HOME_FAST: 1500, HOME_SLOW: 400, BACKOFF: 600, MARGIN: 200, SLIP_SEC: 0.02,
-    STEP_SPEED: 1500, SETTLE_MS: 700, GUARD_RPM: 40, GUARD_DROP: 7700, OVERSHOOT: 900, EXPECTED_TRAVEL: 47069
+    STEP_SPEED: 1500, SETTLE_MS: 700, GUARD_RPM: 40, GUARD_DROP: 7700, OVERSHOOT: 900, EXPECTED_TRAVEL: 43944
   };
   class AbortError extends Error { constructor() { super('Test aborted'); this.name = 'AbortError'; } }
 
