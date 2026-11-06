@@ -150,10 +150,25 @@
     const label = dir < 0 ? 'light' : 'heavy';
     const approach = async speed => {
       const n0 = ctx.bike.nStall;
-      const thrs = speed >= 1200 ? 180 : 65;
+      const thrs = speed >= 1200 ? 190 : 100;
       ctx.send('STALL_THRS:' + thrs);
       ctx.send('SET_SPEED:' + speed); ctx.send('RUN:' + dir);
-      const ok = await ctx.waitUntil(() => ctx.bike.nStall > n0, 150000, 100);
+      let lastPot = ctx.bike.ss2k.pot;
+      let lastPos = ctx.bike.ss2k.pos;
+      const t0 = Date.now();
+      const ok = await ctx.waitUntil(() => {
+        if (ctx.bike.nStall > n0) return true;
+        const curPos = ctx.bike.ss2k.pos;
+        const curPot = ctx.bike.ss2k.pot;
+        if (Math.abs(curPot - lastPot) >= 2) {
+          lastPot = curPot;
+          lastPos = curPos;
+        } else if (Math.abs(curPos - lastPos) > 850 && (Date.now() - t0) > 600) {
+          console.warn('[cal-tests] Pot motion watchdog tripped! Motor moving but pot stationary.');
+          return true;
+        }
+        return false;
+      }, 150000, 100);
       ctx.send('STOP'); await ctx.sleep(500);
       if (!ok) throw new Error(`No stall detected at the ${label} end within 150 s. Check motor current / stall threshold, or the sled is jammed.`);
       return ctx.bike.ss2k.pos;
