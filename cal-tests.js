@@ -150,9 +150,11 @@
     const label = dir < 0 ? 'light' : 'heavy';
     const approach = async speed => {
       const n0 = ctx.bike.nStall;
+      const thrs = speed >= 1200 ? 180 : 65;
+      ctx.send('STALL_THRS:' + thrs);
       ctx.send('SET_SPEED:' + speed); ctx.send('RUN:' + dir);
       const ok = await ctx.waitUntil(() => ctx.bike.nStall > n0, 150000, 100);
-      ctx.send('STOP'); await ctx.sleep(1000);
+      ctx.send('STOP'); await ctx.sleep(500);
       if (!ok) throw new Error(`No stall detected at the ${label} end within 150 s. Check motor current / stall threshold, or the sled is jammed.`);
       return ctx.bike.ss2k.pos;
     };
