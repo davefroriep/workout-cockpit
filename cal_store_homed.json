@@ -1,0 +1,40 @@
+{
+  "exportedAt": "2026-11-06T13:22:00.000Z",
+  "store": {
+    "range": {
+      "safeMin": 200,
+      "safeMax": 43744,
+      "travel": 43944,
+      "potLight": 736,
+      "potHeavy": 2891,
+      "potMode": true,
+      "spanMax": 43744,
+      "slipEst": 8,
+      "at": 1793927840000
+    },
+    "tests": {
+      "home": {
+        "status": "done",
+        "summary": {
+          "travel": 43944,
+          "lightPosSd": 2.1,
+          "heavyPosSd": 70.1,
+          "lightPot": 736,
+          "heavyPot": 2891,
+          "lightPotSd": 6.2,
+          "heavyPotSd": 2.7,
+          "potSpan": 2155,
+          "clipped": false,
+          "warnings": [],
+          "ok": true,
+          "potMode": true,
+          "safeMin": 200,
+          "safeMax": 43744,
+          "potLightSafe": 745,
+          "potHeavySafe": 2880
+        },
+        "at": 1793927840000
+      }
+    }
+  }
+}
