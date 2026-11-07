@@ -122,6 +122,66 @@
           }
         },
         "at": 1794002062290
+      },
+      "seq": {
+        "status": "done",
+        "summary": {
+          "table": [
+            {
+              "move": "fwd@3000",
+              "mean": -91.0,
+              "sd": 86.8,
+              "historySpread": 65.0,
+              "prevKinds": 3
+            },
+            {
+              "move": "rev@500",
+              "mean": -70.0,
+              "sd": 102.4,
+              "historySpread": 39.0,
+              "prevKinds": 2
+            },
+            {
+              "move": "fwd@500",
+              "mean": -57.0,
+              "sd": 105.0,
+              "historySpread": 114.0,
+              "prevKinds": 3
+            },
+            {
+              "move": "rev@3000",
+              "mean": -51.0,
+              "sd": 157.5,
+              "historySpread": 174.0,
+              "prevKinds": 2
+            }
+          ],
+          "maxHistorySpread": 174.0,
+          "verdict": "Lost motion depends on what the previous moves were - a learned lash state is needed.",
+          "drifts": [
+            {
+              "seq": "Fast fwd, slow rev, slow fwd, fast rev",
+              "driftSteps": -78.0
+            },
+            {
+              "seq": "Slow, slow, fast, slow",
+              "driftSteps": 216.0
+            },
+            {
+              "seq": "All fast",
+              "driftSteps": 39.0
+            },
+            {
+              "seq": "All slow",
+              "driftSteps": 78.0
+            },
+            {
+              "seq": "Fast, fast, slow, slow",
+              "driftSteps": 98.0
+            }
+          ]
+        },
+        "at": 1794010764634
       }
     },
     "potmap": {
