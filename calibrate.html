@@ -603,10 +603,10 @@
       <span id="rezeroText"></span>
       <button type="button" id="btnQuickRezero" class="btn-warn" style="min-height:36px;">⚡ Quick Re-Zero Light Stop (~15s)</button>
     </div>
-    <details id="logDrawer" class="log-panel">
+    <details id="logDrawer" class="log-panel" open>
       <summary>
         <span>📋 Live BLE &amp; Calibration Log <span id="logLatestSummary" style="font-weight:600; color:var(--cyan);">— Ready</span></span>
-        <span style="font-size:0.7rem; color:var(--muted);">Tap to expand</span>
+        <span style="font-size:0.7rem; color:var(--muted);">Tap to collapse</span>
       </summary>
       <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
         <button type="button" id="btnCopyLog" style="min-height:32px; padding:4px 10px;">📋 Copy Log</button>
@@ -760,7 +760,7 @@
 
   <footer>
     <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
-    <span>Rev v7.4 • 2026-11-17 18:55</span>
+    <span>Rev v7.5 • 2026-11-17 18:58</span>
   </footer>
 
   <script src="cal-core.js"></script>
@@ -1586,6 +1586,10 @@
       });
 
       const waitMs = ms => new Promise(r => setTimeout(r, ms));
+      const withTimeout = (promise, ms, label) => Promise.race([
+        promise,
+        new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms))
+      ]);
       function setConnBtn(id, state, label) {
         const btn = document.getElementById(id);
         btn.classList.remove('connected', 'connecting', 'lost');
@@ -1620,12 +1624,13 @@
           let rxChar = null;
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
-              const server = await dev.gatt.connect();
+              const server = await withTimeout(dev.gatt.connect(), 8000, 'SS2K GATT connect');
+              bleLog('info', `SS2K: GATT connected (attempt ${attempt}). Reading NUS...`);
               await waitMs(400);
-              const service = await server.getPrimaryService(NUS_SERVICE);
-              ss2kTxChar = await service.getCharacteristic(NUS_TX);
-              rxChar = await service.getCharacteristic(NUS_RX);
-              await rxChar.startNotifications();
+              const service = await withTimeout(server.getPrimaryService(NUS_SERVICE), 6000, 'SS2K NUS service');
+              ss2kTxChar = await withTimeout(service.getCharacteristic(NUS_TX), 5000, 'SS2K TX char');
+              rxChar = await withTimeout(service.getCharacteristic(NUS_RX), 5000, 'SS2K RX char');
+              await withTimeout(rxChar.startNotifications(), 5000, 'SS2K notify');
               break;
             } catch (e) {
               bleLog('warn', `SS2K connect attempt ${attempt} failed: ${e.message}`);
@@ -1690,24 +1695,24 @@
           let char = null;
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
-              const server = await dev.gatt.connect();
+              const server = await withTimeout(dev.gatt.connect(), 8000, 'C7 GATT connect');
               bleLog('info', `C7: GATT connected (attempt ${attempt}). Discovering FTMS 0x1826...`);
               await waitMs(450);
               let service;
               try {
-                service = await server.getPrimaryService(FTMS_SERVICE);
+                service = await withTimeout(server.getPrimaryService(FTMS_SERVICE), 6000, 'C7 FTMS service');
               } catch (svcErr) {
                 try {
-                  const allSvcs = await server.getPrimaryServices();
+                  const allSvcs = await withTimeout(server.getPrimaryServices(), 5000, 'C7 list services');
                   bleLog('warn', 'C7 available services: ' + allSvcs.map(s => s.uuid).join(', '));
                 } catch (e2) {
                   bleLog('warn', 'C7 getPrimaryServices() also failed: ' + e2.message);
                 }
                 throw svcErr;
               }
-              char = await service.getCharacteristic(FTMS_BIKE_DATA);
+              char = await withTimeout(service.getCharacteristic(FTMS_BIKE_DATA), 5000, 'C7 0x2AD2 char');
               bleLog('info', `C7: Subscribing to 0x2AD2 (notify=${char.properties.notify}, indicate=${char.properties.indicate})...`);
-              await char.startNotifications();
+              await withTimeout(char.startNotifications(), 5000, 'C7 notify');
               break;
             } catch (e) {
               bleLog('warn', `C7 connect attempt ${attempt} failed: ${e.message}`);
@@ -1814,12 +1819,17 @@
         }
       });
 
+      // Global error trap -> live log
+      window.addEventListener('error', e => bleLog('err', 'JS Error: ' + (e.message || e.error)));
+      window.addEventListener('unhandledrejection', e => bleLog('err', 'Promise Error: ' + (e.reason?.message || e.reason)));
+
       // Register Service Worker so GitHub Pages updates immediately
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js').then(reg => reg.update()).catch(() => {});
       }
 
       // Initial render + auto-preload pre-homed Part A
+      bleLog('info', 'Rev v7.5 loaded. Tap PAIR SS2K & PAIR C7 CONSOLE.');
       renderLogs();
       renderTestMatrix();
       renderSelectedTestPanel();
