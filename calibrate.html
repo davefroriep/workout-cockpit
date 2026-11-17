@@ -134,6 +134,22 @@
       border-color: var(--green);
       color: var(--green);
     }
+    .btn-conn.connecting {
+      border-color: var(--amber);
+      color: var(--amber);
+      background: rgba(255, 179, 0, 0.12);
+    }
+    .btn-conn.lost {
+      border-color: var(--red);
+      color: var(--red);
+      background: rgba(255, 61, 87, 0.12);
+    }
+    .btn-warn {
+      background: var(--amber);
+      color: #000000;
+      border-color: var(--amber);
+      font-weight: 900;
+    }
     .btn-sim.active {
       border-color: var(--amber);
       background: rgba(255, 179, 0, 0.14);
@@ -199,6 +215,79 @@
         align-items: start;
       }
     }
+    @media (max-width: 979px) {
+      .runner-sticky {
+        order: -1;
+        position: static !important;
+      }
+    }
+    .top-alerts {
+      max-width: 1280px;
+      margin: 10px auto 0;
+      padding: 0 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .alert-banner {
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+    }
+    .alert-banner.err {
+      border-color: var(--red);
+      background: rgba(255, 61, 87, 0.14);
+      color: #ffd6dc;
+    }
+    .alert-banner.warn {
+      border-color: var(--amber);
+      background: rgba(255, 179, 0, 0.14);
+      color: #ffe8a3;
+    }
+    .log-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+    }
+    .log-panel summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      list-style: none;
+    }
+    .log-panel summary::-webkit-details-marker { display: none; }
+    .log-box {
+      margin-top: 8px;
+      max-height: 180px;
+      overflow-y: auto;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .log-err { color: var(--red); }
+    .log-warn { color: var(--amber); }
+    .log-ok { color: var(--green); }
+    .log-info { color: var(--cyan); }
     .panel {
       background: var(--card);
       border: 1px solid var(--border);
@@ -505,6 +594,29 @@
     </div>
   </header>
 
+  <div class="top-alerts">
+    <div id="topErrorBanner" class="alert-banner err" style="display:none;">
+      <span id="topErrorText"></span>
+      <button type="button" id="btnDismissTopErr" style="min-height:32px; padding:4px 10px;">Dismiss</button>
+    </div>
+    <div id="rezeroBanner" class="alert-banner warn" style="display:none;">
+      <span id="rezeroText"></span>
+      <button type="button" id="btnQuickRezero" class="btn-warn" style="min-height:36px;">⚡ Quick Re-Zero Light Stop (~15s)</button>
+    </div>
+    <details id="logDrawer" class="log-panel">
+      <summary>
+        <span>📋 Live BLE &amp; Calibration Log <span id="logLatestSummary" style="font-weight:600; color:var(--cyan);">— Ready</span></span>
+        <span style="font-size:0.7rem; color:var(--muted);">Tap to expand</span>
+      </summary>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+        <button type="button" id="btnCopyLog" style="min-height:32px; padding:4px 10px;">📋 Copy Log</button>
+        <button type="button" id="btnSaveLog" style="min-height:32px; padding:4px 10px;">⬇ Save Log</button>
+        <button type="button" id="btnClearLog" style="min-height:32px; padding:4px 10px;">Clear Log</button>
+      </div>
+      <div id="logBox" class="log-box"></div>
+    </details>
+  </div>
+
   <main>
     <!-- LEFT COLUMN: Modular Bite-Sized Test Matrix -->
     <section class="panel" aria-labelledby="matrixHeading">
@@ -549,13 +661,15 @@
 
           <div style="display:flex; flex-wrap:wrap; gap:8px; margin:12px 0;">
             <button type="button" id="btnStartTest" class="btn-primary">▶ START THIS TEST</button>
-            <button type="button" id="btnStopTest" class="btn-danger" disabled>⏹ STOP / ABORT</button>
+            <button type="button" id="btnTooHard" class="btn-warn" disabled>✋ Too Hard / Stop Here</button>
+            <button type="button" id="btnStopTest" class="btn-danger" disabled>⏹ ABORT</button>
+            <button type="button" id="btnNextRecommended" style="margin-left:auto;">Next Step →</button>
             <button type="button" id="btnResetTest">↺ Clear Result</button>
           </div>
 
           <label for="testProgressBar" id="progressLabel" style="font-size:0.75rem; color:var(--muted); font-weight:700; display:flex; justify-content:space-between;">
             <span id="statusPolite" role="status" aria-live="polite">Idle — ready when you are.</span>
-            <span id="timerDisplay"></span>
+            <span id="timerDisplay" style="color:var(--cyan); font-weight:900;"></span>
           </label>
           <progress id="testProgressBar" class="cal-progress" value="0" max="1"></progress>
 
@@ -577,6 +691,9 @@
                 <div class="telem-label">C7 WATTS</div>
                 <div class="coach-val" id="coachWatts">--</div>
               </div>
+            </div>
+            <div style="margin-top:10px; display:flex; justify-content:center; gap:8px;">
+              <button type="button" id="btnCoachTooHard" class="btn-warn">✋ Too Hard / Skip Rest</button>
             </div>
           </div>
 
@@ -643,7 +760,7 @@
 
   <footer>
     <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
-    <span>Rev v7.3 • 2026-11-06 19:20</span>
+    <span>Rev v7.4 • 2026-11-17 18:55</span>
   </footer>
 
   <script src="cal-core.js"></script>
@@ -653,16 +770,25 @@
     (function () {
       'use strict';
       const STORAGE_KEY = 'ss2k_cal_cockpit_v1';
+      const LOG_STORAGE_KEY = 'ss2k_cal_logs_v1';
       const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
       const NUS_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
       const NUS_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
       const FTMS_SERVICE = 0x1826;
       const FTMS_BIKE_DATA = 0x2ad2;
+      const RECOMMENDED_ORDER = [
+        'home', 'potmap', 'lash', 'seq',
+        'c7range', 'lag', 'stairs', 'hyst',
+        'g0', 'g20', 'g40', 'g60', 'g80', 'g100',
+        'g10', 'g30', 'g50', 'g70', 'g90',
+        'down', 'holdout'
+      ];
 
       let store = loadStore();
-      let selectedTestId = 'home';
+      let selectedTestId = pickNextRecommendedId();
       let activeCtx = null;
       let runningTestId = null;
+      let rezeroRunning = false;
 
       // Demo simulator state
       let simMode = true;
@@ -670,10 +796,112 @@
       let sim = new SimBike({ lash: 420, flop: 95 });
 
       // Live BLE state
+      let ss2kDevice = null;
       let ss2kTxChar = null;
+      let c7Device = null;
       let latestSS2K = null;
       let latestC7 = null;
+      let loggedFirstSS2K = false;
+      let loggedFirstC7 = false;
+      let wakeLock = null;
+      let audioCtx = null;
 
+      // ---------- Persistent & Live Diagnostics Logger ----------
+      let logEntries = loadLogs();
+      function loadLogs() {
+        try {
+          const raw = localStorage.getItem(LOG_STORAGE_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return [];
+      }
+      function saveLogs() {
+        try { localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logEntries.slice(-250))); } catch (e) {}
+      }
+      function renderLogs() {
+        const box = document.getElementById('logBox');
+        const sum = document.getElementById('logLatestSummary');
+        if (!box) return;
+        box.innerHTML = logEntries.map(e => {
+          const cls = e.lvl === 'err' ? 'log-err' : e.lvl === 'warn' ? 'log-warn' : e.lvl === 'ok' ? 'log-ok' : 'log-info';
+          return `<div class="${cls}">[${e.ts}] ${e.msg.replace(/</g, '&lt;')}</div>`;
+        }).join('');
+        box.scrollTop = box.scrollHeight;
+        if (logEntries.length && sum) {
+          const last = logEntries[logEntries.length - 1];
+          sum.textContent = `— ${last.msg}`;
+          sum.style.color = last.lvl === 'err' ? 'var(--red)' : last.lvl === 'warn' ? 'var(--amber)' : last.lvl === 'ok' ? 'var(--green)' : 'var(--cyan)';
+        }
+      }
+      function bleLog(lvl, msg) {
+        const ts = new Date().toTimeString().slice(0, 8);
+        logEntries.push({ ts, lvl, msg });
+        if (logEntries.length > 250) logEntries = logEntries.slice(-250);
+        saveLogs();
+        renderLogs();
+        if (lvl === 'err') {
+          showTopError(msg);
+          const drawer = document.getElementById('logDrawer');
+          if (drawer) drawer.open = true;
+        }
+      }
+      function showTopError(msg) {
+        const el = document.getElementById('topErrorBanner');
+        const txt = document.getElementById('topErrorText');
+        if (el && txt) {
+          txt.textContent = msg;
+          el.style.display = 'flex';
+        }
+      }
+      function hideTopError() {
+        const el = document.getElementById('topErrorBanner');
+        if (el) el.style.display = 'none';
+      }
+
+      // ---------- Screen WakeLock & WebAudio Beep ----------
+      async function ensureWakeLock() {
+        try {
+          if ('wakeLock' in navigator && !wakeLock) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+            bleLog('ok', 'Screen WakeLock active (screen will stay awake during ride).');
+          }
+        } catch (e) {
+          bleLog('warn', 'WakeLock unavailable: keep screen on manually.');
+        }
+      }
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && (ss2kDevice?.gatt?.connected || c7Device?.gatt?.connected || runningTestId)) {
+          ensureWakeLock();
+        }
+      });
+
+      function unlockAudio() {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          if (!audioCtx) audioCtx = new Ctx();
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+        } catch (e) {}
+      }
+      function playBeep(freq = 660, dur = 0.14) {
+        try {
+          if (!audioCtx) return;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq || 660;
+          gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.14));
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + (dur || 0.14) + 0.02);
+        } catch (e) {}
+      }
+
+      // ---------- Store Load + Automatic Pre-Homed Part A Fetch ----------
       function loadStore() {
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
@@ -690,6 +918,41 @@
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
         } catch (e) { console.warn('Could not save store to localStorage', e); }
+      }
+
+      async function autoLoadPrehomedIfNeeded() {
+        const hasPartA = Boolean(store.range && store.potmap && store.tests?.home?.status === 'done');
+        if (hasPartA) return;
+        try {
+          const resp = await fetch('./cal_store_homed.json', { cache: 'no-cache' });
+          if (!resp.ok) return;
+          const parsed = await resp.json();
+          const seed = parsed.store || parsed;
+          if (seed && seed.range && seed.potmap) {
+            store.range = store.range || seed.range;
+            store.potmap = store.potmap || seed.potmap;
+            store.tests = Object.assign({}, seed.tests || {}, store.tests || {});
+            saveStore();
+            selectedTestId = pickNextRecommendedId();
+            bleLog('ok', 'Auto-loaded pre-homed Part A calibration (A1–A4 DONE). Ready for Part B.');
+            renderTestMatrix();
+            renderSelectedTestPanel();
+            renderSurfacePanel();
+            updateTelemetryStrip();
+          }
+        } catch (e) {
+          bleLog('warn', 'Could not auto-fetch cal_store_homed.json: ' + e.message);
+        }
+      }
+
+      function pickNextRecommendedId() {
+        for (const id of RECOMMENDED_ORDER) {
+          const t = CalTests.TESTS.find(x => x.id === id);
+          if (!t) continue;
+          const st = store.tests?.[id]?.status;
+          if (st !== 'done' && prereqsMet(t)) return id;
+        }
+        return 'c7range';
       }
 
       // Hook up simulator callbacks
@@ -715,6 +978,29 @@
         }
       }, 250);
 
+      function checkSS2KAlignment() {
+        const banner = document.getElementById('rezeroBanner');
+        const txt = document.getElementById('rezeroText');
+        if (!banner || !txt || simMode || runningTestId || rezeroRunning || !latestSS2K || !store.potmap) {
+          if (banner && (simMode || !latestSS2K)) banner.style.display = 'none';
+          return;
+        }
+        if (CalCore.isClipped(latestSS2K.pot)) {
+          banner.style.display = 'none';
+          return;
+        }
+        const map = CalCore.makePotMap(store.potmap.up);
+        if (!map) { banner.style.display = 'none'; return; }
+        const expectedPos = map.potToPos(latestSS2K.pot);
+        const drift = Math.abs(latestSS2K.pos - expectedPos);
+        if (drift > 1500) {
+          txt.textContent = `⚠ SS2K position (${latestSS2K.pos}) does not match pot (${latestSS2K.pot} ADC ≈ ${Math.round(expectedPos)} steps) — SS2K probably rebooted.`;
+          banner.style.display = 'flex';
+        } else {
+          banner.style.display = 'none';
+        }
+      }
+
       function updateTelemetryStrip() {
         const s = latestSS2K;
         const c = latestC7;
@@ -730,16 +1016,17 @@
           document.getElementById('telSS2KCad').textContent = `${Number(s.cad || 0).toFixed(0)} rpm`;
         }
         if (c) {
-          document.getElementById('telC7Cad').textContent = `${Number(c.cadence || 0).toFixed(0)} rpm`;
-          document.getElementById('telC7Lvl').textContent = c.resistance ?? '--';
-          document.getElementById('telC7W').textContent = `${ c.watts ?? '--' } W`;
+          document.getElementById('telC7Cad').textContent = c.cad !== undefined ? `${Number(c.cad).toFixed(0)} rpm` : '--';
+          document.getElementById('telC7Lvl').textContent = c.res ?? '--';
+          document.getElementById('telC7W').textContent = c.w !== undefined ? `${c.w} W` : '--';
         }
         if (store.range) {
           document.getElementById('rangeStatusLabel').textContent =
-            `Safe Span: ${store.range.safeMin}..${store.range.safeMax} steps (${store.range.potLight}..${store.range.potHeavy} ADC)`;
+            `Safe Span: ${store.range.safeMin}..${store.range.spanMax || store.range.safeMax} steps (${store.range.potLight}..${store.range.potHeavy} ADC)`;
         } else {
           document.getElementById('rangeStatusLabel').textContent = 'Not Homed Yet (Run A1 First)';
         }
+        checkSS2KAlignment();
       }
 
       // Check prerequisites for a test
@@ -815,6 +1102,7 @@
               selectedTestId = t.id;
               renderTestMatrix();
               renderSelectedTestPanel();
+              document.getElementById('runnerHeading')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             });
             grid.appendChild(btn);
           }
@@ -857,10 +1145,19 @@
           badge.textContent = `NEEDS: ${t.needs.join(', ').toUpperCase()}`;
         }
 
-        document.getElementById('btnStartTest').disabled = Boolean(runningTestId) || !unlocked;
+        document.getElementById('btnStartTest').disabled = Boolean(runningTestId) || !unlocked || rezeroRunning;
         document.getElementById('btnStartTest').textContent = saved?.status === 'done' ? '▶ RE-RUN THIS TEST' : '▶ START THIS TEST';
+        document.getElementById('btnTooHard').disabled = !runningTestId;
         document.getElementById('btnStopTest').disabled = !runningTestId;
         document.getElementById('btnResetTest').disabled = Boolean(runningTestId) || !saved;
+
+        const nextId = pickNextRecommendedId();
+        const nextTest = CalTests.TESTS.find(x => x.id === nextId);
+        const btnNext = document.getElementById('btnNextRecommended');
+        if (btnNext) {
+          btnNext.textContent = nextTest ? `Next: ${nextTest.title} →` : 'All Done ✓';
+          btnNext.disabled = Boolean(runningTestId) || !nextTest || nextId === selectedTestId;
+        }
 
         renderSummaryTable(t.id, saved);
       }
@@ -977,7 +1274,60 @@
         }
         if (ss2kTxChar) {
           const enc = new TextEncoder().encode(cmd + '\n');
-          ss2kTxChar.writeValueWithoutResponse(enc).catch(err => console.warn('BLE write err:', err));
+          ss2kTxChar.writeValueWithoutResponse(enc).catch(err => bleLog('warn', 'SS2K BLE write err: ' + err.message));
+        }
+      }
+
+      // Quick Re-Zero Light Stop (preserves Part A potmap & range)
+      async function runQuickRezero() {
+        if (rezeroRunning || runningTestId || simMode || !latestSS2K) return;
+        rezeroRunning = true;
+        renderSelectedTestPanel();
+        bleLog('info', 'Quick Re-Zero: Finding light stop (no data wiped)...');
+        document.getElementById('statusPolite').textContent = 'Re-zeroing light stop (~15s)...';
+        try {
+          const sleepMs = ms => new Promise(r => setTimeout(r, ms));
+          const approach = async speed => {
+            sendCommand('AUTO_STOP:1');
+            sendCommand('SET_MA:750');
+            sendCommand('STALL_THRS:' + (speed >= 1200 ? 190 : 100));
+            sendCommand('SET_SPEED:' + speed);
+            sendCommand('RUN:-1');
+            let lastPot = latestSS2K.pot, lastPos = latestSS2K.pos, startStall = latestSS2K.stall;
+            const t0 = Date.now();
+            while (Date.now() - t0 < 45000) {
+              await sleepMs(100);
+              if (latestSS2K.stall && !startStall && (Date.now() - t0 > 500)) break;
+              startStall = latestSS2K.stall;
+              if (Math.abs(latestSS2K.pot - lastPot) >= 2) {
+                lastPot = latestSS2K.pot; lastPos = latestSS2K.pos;
+              } else if (Math.abs(latestSS2K.pos - lastPos) > 850 && (Date.now() - t0 > 600)) {
+                break;
+              }
+            }
+            sendCommand('STOP');
+            await sleepMs(450);
+          };
+          await approach(1500);
+          sendCommand('SET_SPEED:1000');
+          sendCommand('JOG:600');
+          await sleepMs(1400);
+          await approach(400);
+          sendCommand('ZERO');
+          await sleepMs(400);
+          const safeMin = store.range?.safeMin || 200;
+          sendCommand('SET_SPEED:1500');
+          sendCommand('JOG:' + safeMin);
+          await sleepMs(800);
+          bleLog('ok', `Quick Re-Zero complete: pos=${latestSS2K.pos}, pot=${latestSS2K.pot}`);
+          document.getElementById('statusPolite').textContent = 'Light stop aligned! Ready for Part B.';
+          document.getElementById('rezeroBanner').style.display = 'none';
+        } catch (err) {
+          bleLog('err', 'Quick Re-Zero failed: ' + err.message);
+        } finally {
+          rezeroRunning = false;
+          renderSelectedTestPanel();
+          updateTelemetryStrip();
         }
       }
 
@@ -985,8 +1335,22 @@
       async function startSelectedTest() {
         const t = CalTests.TESTS.find(x => x.id === selectedTestId);
         if (!t || runningTestId) return;
+        unlockAudio();
+        ensureWakeLock();
+
+        if (!simMode && t.rider && !c7Device?.gatt?.connected) {
+          bleLog('warn', 'Pair C7 Console first (or turn Demo Sim ON) before running rider tests.');
+          showTopError('Pair C7 Console first before starting ' + t.title + '.');
+          return;
+        }
+        if (!simMode && !ss2kDevice?.gatt?.connected) {
+          bleLog('warn', 'Pair SS2K first before starting ' + t.title + '.');
+          showTopError('Pair SS2K first before starting ' + t.title + '.');
+          return;
+        }
 
         runningTestId = t.id;
+        bleLog('info', `Started test: ${t.title} (${t.id})`);
         renderSelectedTestPanel();
         const prog = document.getElementById('testProgressBar');
         prog.value = 0;
@@ -1026,13 +1390,19 @@
           progress(frac) {
             prog.value = CalCore.clamp(Number(frac) || 0, 0, 1);
           },
-          timer(sec) {
-            document.getElementById('timerDisplay').textContent = sec > 0 ? `${Math.ceil(sec)}s` : '';
+          timer(labelOrSec, maybeSec) {
+            const hasLabel = maybeSec !== undefined;
+            const label = hasLabel ? labelOrSec : '';
+            const sec = Number(hasLabel ? maybeSec : labelOrSec) || 0;
+            document.getElementById('timerDisplay').textContent =
+              sec > 0 ? (label ? `${label}: ${Math.ceil(sec)}s` : `${Math.ceil(sec)}s`) : '';
           },
           phase(txt) {
             document.getElementById('coachHeader').textContent = txt ? `PHASE: ${txt.toUpperCase()}` : 'HOLD TARGET CADENCE';
           },
-          beep() {},
+          beep(freq, dur) {
+            playBeep(freq, dur);
+          },
           note(txt) {
             document.getElementById('statusPolite').textContent = txt;
           },
@@ -1089,10 +1459,16 @@
             at: Date.now()
           };
           saveStore();
+          bleLog(res.status === 'done' ? 'ok' : 'warn', `Finished ${t.title}: ${res.status.toUpperCase()}`);
           ui.status(`${t.title} finished (${res.status.toUpperCase()}).`);
           prog.value = 1;
+          if (res.status === 'done') {
+            selectedTestId = pickNextRecommendedId();
+          }
         } catch (err) {
-          ui.status(err.name === 'AbortError' ? `${t.title} stopped by user.` : `Error: ${err.message}`);
+          const msg = err.name === 'AbortError' ? `${t.title} stopped by user.` : `${t.title} error: ${err.message}`;
+          bleLog(err.name === 'AbortError' ? 'warn' : 'err', msg);
+          ui.status(msg);
         } finally {
           document.getElementById('promptBox').style.display = 'none';
           document.getElementById('cadenceCoach').style.display = 'none';
@@ -1110,8 +1486,8 @@
         const coach = document.getElementById('cadenceCoach');
         if (coach.style.display === 'none') return;
         const target = Number(document.getElementById('coachTarget').textContent) || 0;
-        const actual = latestC7?.cadence ?? latestSS2K?.cad ?? 0;
-        const watts = latestC7?.watts ?? '--';
+        const actual = latestC7?.cad ?? latestSS2K?.cad ?? 0;
+        const watts = latestC7?.w ?? '--';
         document.getElementById('coachActual').textContent = Number(actual).toFixed(0);
         document.getElementById('coachWatts').textContent = watts;
         const diff = Math.abs(actual - target);
@@ -1120,15 +1496,33 @@
 
       // Wire UI Buttons
       document.getElementById('btnStartTest').addEventListener('click', startSelectedTest);
+      const triggerTooHard = () => {
+        if (activeCtx) {
+          activeCtx.stopFlag = true;
+          bleLog('warn', 'Rider tapped "Too Hard / Stop Here" — finishing current step cleanly.');
+          document.getElementById('statusPolite').textContent = 'Stopping cleanly & saving progress...';
+        }
+      };
+      document.getElementById('btnTooHard').addEventListener('click', triggerTooHard);
+      document.getElementById('btnCoachTooHard').addEventListener('click', triggerTooHard);
       document.getElementById('btnStopTest').addEventListener('click', () => {
         if (activeCtx) {
           activeCtx.aborted = true;
           sendCommand('STOP');
         }
       });
+      document.getElementById('btnNextRecommended').addEventListener('click', () => {
+        if (runningTestId) return;
+        selectedTestId = pickNextRecommendedId();
+        renderTestMatrix();
+        renderSelectedTestPanel();
+      });
+      document.getElementById('btnQuickRezero').addEventListener('click', runQuickRezero);
+      document.getElementById('btnDismissTopErr').addEventListener('click', hideTopError);
       document.getElementById('btnEmergencyStopTop').addEventListener('click', () => {
         if (activeCtx) activeCtx.aborted = true;
         sendCommand('STOP');
+        bleLog('warn', 'EMERGENCY STOP sent to stepper.');
         document.getElementById('statusPolite').textContent = 'EMERGENCY STOP SENT TO STEPPER.';
       });
       document.getElementById('btnResetTest').addEventListener('click', () => {
@@ -1151,6 +1545,28 @@
         });
       });
 
+      // Log Drawer Controls
+      document.getElementById('btnCopyLog').addEventListener('click', () => {
+        const text = logEntries.map(e => `[${e.ts}] [${e.lvl}] ${e.msg}`).join('\n');
+        navigator.clipboard?.writeText(text).then(() => {
+          document.getElementById('btnCopyLog').textContent = 'Copied ✓';
+          setTimeout(() => { document.getElementById('btnCopyLog').textContent = '📋 Copy Log'; }, 1500);
+        });
+      });
+      document.getElementById('btnSaveLog').addEventListener('click', () => {
+        const text = logEntries.map(e => `[${e.ts}] [${e.lvl}] ${e.msg}`).join('\n');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `ss2k_ble_log_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+        a.click();
+      });
+      document.getElementById('btnClearLog').addEventListener('click', () => {
+        logEntries = [];
+        saveLogs();
+        renderLogs();
+      });
+
       // Simulator Toggles
       const btnSimToggle = document.getElementById('btnSimToggle');
       const btnSimSpeed = document.getElementById('btnSimSpeed');
@@ -1169,18 +1585,56 @@
         updateSimButtons();
       });
 
-      // BLE Pairing for Real Bike
+      const waitMs = ms => new Promise(r => setTimeout(r, ms));
+      function setConnBtn(id, state, label) {
+        const btn = document.getElementById(id);
+        btn.classList.remove('connected', 'connecting', 'lost');
+        if (state) btn.classList.add(state);
+        btn.textContent = label;
+      }
+
+      // BLE Pairing for SS2K
       document.getElementById('btnPairSS2K').addEventListener('click', async () => {
+        if (!navigator.bluetooth) {
+          bleLog('err', 'Web Bluetooth unavailable here. Open this URL in Chrome on Android/Desktop.');
+          return;
+        }
+        hideTopError();
+        unlockAudio();
         try {
+          setConnBtn('btnPairSS2K', 'connecting', 'PAIRING SS2K…');
+          bleLog('info', 'SS2K: Opening Bluetooth chooser...');
           const dev = await navigator.bluetooth.requestDevice({
             filters: [{ services: [NUS_SERVICE] }, { namePrefix: 'SS2K' }],
             optionalServices: [NUS_SERVICE]
           });
-          const server = await dev.gatt.connect();
-          const service = await server.getPrimaryService(NUS_SERVICE);
-          ss2kTxChar = await service.getCharacteristic(NUS_TX);
-          const rxChar = await service.getCharacteristic(NUS_RX);
-          await rxChar.startNotifications();
+          ss2kDevice = dev;
+          loggedFirstSS2K = false;
+          bleLog('info', `SS2K: Selected "${dev.name || dev.id}". Connecting GATT...`);
+          dev.addEventListener('gattserverdisconnected', () => {
+            bleLog('warn', 'SS2K GATT disconnected.');
+            setConnBtn('btnPairSS2K', 'lost', 'SS2K LOST — RECONNECT');
+            ss2kTxChar = null;
+          });
+
+          let rxChar = null;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              const server = await dev.gatt.connect();
+              await waitMs(400);
+              const service = await server.getPrimaryService(NUS_SERVICE);
+              ss2kTxChar = await service.getCharacteristic(NUS_TX);
+              rxChar = await service.getCharacteristic(NUS_RX);
+              await rxChar.startNotifications();
+              break;
+            } catch (e) {
+              bleLog('warn', `SS2K connect attempt ${attempt} failed: ${e.message}`);
+              try { dev.gatt.disconnect(); } catch (_) {}
+              if (attempt === 2) throw e;
+              await waitMs(600);
+            }
+          }
+
           let buf = '';
           rxChar.addEventListener('characteristicvaluechanged', e => {
             buf += new TextDecoder().decode(e.target.value);
@@ -1190,6 +1644,10 @@
               const parsed = CalCore.parseSS2KLine(line.trim());
               if (parsed) {
                 latestSS2K = parsed;
+                if (!loggedFirstSS2K) {
+                  loggedFirstSS2K = true;
+                  bleLog('ok', `SS2K live stream active (pos=${parsed.pos}, pot=${parsed.pot}, sg=${parsed.sg}).`);
+                }
                 if (activeCtx && !simMode) activeCtx.feed('ss2k', parsed);
                 updateTelemetryStrip();
               }
@@ -1197,39 +1655,88 @@
           });
           simMode = false;
           updateSimButtons();
-          const btn = document.getElementById('btnPairSS2K');
-          btn.classList.add('connected');
-          btn.textContent = 'SS2K CONNECTED ✓';
+          setConnBtn('btnPairSS2K', 'connected', 'SS2K CONNECTED ✓');
+          bleLog('ok', `SS2K connected (${dev.name || 'SS2K'}).`);
+          ensureWakeLock();
         } catch (err) {
-          document.getElementById('statusPolite').textContent = 'SS2K BLE connection cancelled or failed: ' + err.message;
+          setConnBtn('btnPairSS2K', 'lost', 'PAIR SS2K (RETRY)');
+          bleLog('err', 'SS2K BLE failed: ' + err.message);
         }
       });
 
+      // BLE Pairing for Bowflex C7 Console
       document.getElementById('btnPairC7').addEventListener('click', async () => {
+        if (!navigator.bluetooth) {
+          bleLog('err', 'Web Bluetooth unavailable here. Open this URL in Chrome on Android/Desktop.');
+          return;
+        }
+        hideTopError();
+        unlockAudio();
         try {
+          setConnBtn('btnPairC7', 'connecting', 'PAIRING C7…');
+          bleLog('info', 'C7: Opening Bluetooth chooser...');
           const dev = await navigator.bluetooth.requestDevice({
             filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'Bowflex' }, { namePrefix: 'JRNY' }, { namePrefix: 'C7' }],
-            optionalServices: [FTMS_SERVICE]
+            optionalServices: [FTMS_SERVICE, 0x1816, 0x180d, 0x180f, 0x180a]
           });
-          const server = await dev.gatt.connect();
-          const service = await server.getPrimaryService(FTMS_SERVICE);
-          const char = await service.getCharacteristic(FTMS_BIKE_DATA);
-          await char.startNotifications();
+          c7Device = dev;
+          loggedFirstC7 = false;
+          bleLog('info', `C7: Selected "${dev.name || dev.id}". Connecting GATT...`);
+          dev.addEventListener('gattserverdisconnected', () => {
+            bleLog('warn', 'C7 GATT disconnected.');
+            setConnBtn('btnPairC7', 'lost', 'C7 LOST — RECONNECT');
+          });
+
+          let char = null;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              const server = await dev.gatt.connect();
+              bleLog('info', `C7: GATT connected (attempt ${attempt}). Discovering FTMS 0x1826...`);
+              await waitMs(450);
+              let service;
+              try {
+                service = await server.getPrimaryService(FTMS_SERVICE);
+              } catch (svcErr) {
+                try {
+                  const allSvcs = await server.getPrimaryServices();
+                  bleLog('warn', 'C7 available services: ' + allSvcs.map(s => s.uuid).join(', '));
+                } catch (e2) {
+                  bleLog('warn', 'C7 getPrimaryServices() also failed: ' + e2.message);
+                }
+                throw svcErr;
+              }
+              char = await service.getCharacteristic(FTMS_BIKE_DATA);
+              bleLog('info', `C7: Subscribing to 0x2AD2 (notify=${char.properties.notify}, indicate=${char.properties.indicate})...`);
+              await char.startNotifications();
+              break;
+            } catch (e) {
+              bleLog('warn', `C7 connect attempt ${attempt} failed: ${e.message}`);
+              try { dev.gatt.disconnect(); } catch (_) {}
+              if (attempt === 2) throw e;
+              await waitMs(700);
+            }
+          }
+
           char.addEventListener('characteristicvaluechanged', e => {
             const parsed = CalCore.parseFtms(e.target.value);
             if (parsed) {
               latestC7 = parsed;
+              if (!loggedFirstC7) {
+                loggedFirstC7 = true;
+                bleLog('ok', `C7 FTMS stream active (cad=${parsed.cad}, res=${parsed.res}, w=${parsed.w}).`);
+              }
               if (activeCtx && !simMode) activeCtx.feed('c7', parsed);
               updateTelemetryStrip();
             }
           });
           simMode = false;
           updateSimButtons();
-          const btn = document.getElementById('btnPairC7');
-          btn.classList.add('connected');
-          btn.textContent = 'C7 CONNECTED ✓';
+          setConnBtn('btnPairC7', 'connected', 'C7 CONNECTED ✓');
+          bleLog('ok', `C7 connected (${dev.name || 'C7'}). Waiting for FTMS packets (spin cranks if silent).`);
+          ensureWakeLock();
         } catch (err) {
-          document.getElementById('statusPolite').textContent = 'C7 BLE connection cancelled or failed: ' + err.message;
+          setConnBtn('btnPairC7', 'lost', 'PAIR C7 (RETRY)');
+          bleLog('err', 'C7 BLE failed: ' + err.message + ' — If another app/Android Settings holds C7, Forget it in Bluetooth settings & power-cycle C7.');
         }
       });
 
@@ -1261,13 +1768,14 @@
             const parsed = JSON.parse(reader.result);
             store = parsed.store || parsed;
             saveStore();
+            selectedTestId = pickNextRecommendedId();
             renderTestMatrix();
             renderSelectedTestPanel();
             renderSurfacePanel();
             updateTelemetryStrip();
-            document.getElementById('statusPolite').textContent = 'Calibration JSON imported.';
+            bleLog('ok', 'Calibration JSON imported.');
           } catch (err) {
-            document.getElementById('statusPolite').textContent = 'Invalid JSON file.';
+            bleLog('err', 'Invalid JSON file: ' + err.message);
           }
         };
         reader.readAsText(file);
@@ -1306,11 +1814,18 @@
         }
       });
 
-      // Initial render
+      // Register Service Worker so GitHub Pages updates immediately
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').then(reg => reg.update()).catch(() => {});
+      }
+
+      // Initial render + auto-preload pre-homed Part A
+      renderLogs();
       renderTestMatrix();
       renderSelectedTestPanel();
       renderSurfacePanel();
       updateTelemetryStrip();
+      autoLoadPrehomedIfNeeded();
     })();
   </script>
 </body>
