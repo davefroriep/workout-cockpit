@@ -551,7 +551,7 @@
     <div class="header-top">
       <div class="brand-group">
         <span class="brand-title">SS2K Calibration Cockpit</span>
-        <span class="badge badge-ready" style="font-size:0.7rem;">Rev v8.2</span>
+        <span class="badge badge-ready" style="font-size:0.7rem;">Rev v8.3</span>
         <a class="nav-link" href="index.html">← Workout Cockpit</a>
         <a class="nav-link" href="tuner.html">Tuner</a>
       </div>
@@ -772,7 +772,7 @@
 
   <footer>
     <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
-    <span>Rev v8.2 • 2026-11-17 19:58</span>
+    <span>Rev v8.3 • 2026-11-17 20:03</span>
   </footer>
 
   <script src="cal-core.js"></script>
@@ -860,6 +860,9 @@
         if (logEntries.length > 250) logEntries = logEntries.slice(-250);
         saveLogs();
         renderLogs();
+        if (!String(msg).startsWith('[Bridge]') && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+          try { bridgeWs.send(JSON.stringify({ type: 'client_log', lvl, msg })); } catch (_) {}
+        }
         if (lvl === 'err') {
           showTopError(msg);
           const drawer = document.getElementById('logDrawer');
@@ -979,7 +982,9 @@
         const pump = () => {
           if (!audioCtx || !metroEnabled || metroRpm <= 0) return;
           if (audioCtx.state === 'suspended') audioCtx.resume();
-          while (metroNextTime < audioCtx.currentTime + 0.14) {
+          if (metroNextTime < audioCtx.currentTime - 0.25) metroNextTime = audioCtx.currentTime + 0.04;
+          let guard = 0;
+          while (metroNextTime < audioCtx.currentTime + 0.14 && guard++ < 4) {
             scheduleMetroClick(metroNextTime, (metroBeat % 2) === 0);
             metroNextTime += stepSec;
             metroBeat++;
@@ -1529,6 +1534,7 @@
           },
           phase(txt) {
             document.getElementById('coachHeader').textContent = txt ? `PHASE: ${txt.toUpperCase()}` : 'HOLD TARGET CADENCE';
+            if (txt) bleLog('info', `Phase -> ${txt}`);
           },
           beep(freq, dur) {
             playBeep(freq, dur);
@@ -1541,6 +1547,7 @@
             if (rpm && rpm > 0) {
               coach.style.display = 'block';
               document.getElementById('coachTarget').textContent = rpm;
+              bleLog('info', `Cadence target -> ${rpm} RPM`);
               setMetronomeRpm(rpm);
               if (simMode) sim.setRider(rpm);
             } else {
@@ -2071,7 +2078,7 @@
       });
 
       // Initial render + auto-preload pre-homed Part A
-      bleLog('info', 'Rev v8.2 loaded.');
+      bleLog('info', 'Rev v8.3 loaded.');
       renderLogs();
       renderTestMatrix();
       renderSelectedTestPanel();
