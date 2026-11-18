@@ -102,8 +102,8 @@
     const t0 = ctx.now(); let since = null;
     while (ctx.now() - t0 < (timeoutS || 35) * 1000) {
       if (ctx.stopFlag) { ctx.stopFlag = false; return 'toohard'; }
-      const s = ctx.bike.ss2k;
-      if (s && Math.abs(s.cad - cad) <= 3) { since = since === null ? ctx.now() : since; if (ctx.now() - since >= 3000) return 'ok'; } else since = null;
+      const liveCad = (ctx.bike.c7 && ctx.bike.c7.cad !== undefined) ? ctx.bike.c7.cad : (ctx.bike.ss2k ? ctx.bike.ss2k.cad : null);
+      if (liveCad !== null && Math.abs(liveCad - cad) <= 4.5) { since = since === null ? ctx.now() : since; if (ctx.now() - since >= 2000) return 'ok'; } else since = null;
       ctx.ui.timer('Reach target', Math.max(0, (timeoutS || 35) - (ctx.now() - t0) / 1000));
       await ctx.sleep(200);
     }
@@ -113,8 +113,9 @@
     let lowSince = null; const lim = Math.min(K.GUARD_RPM, cad * 0.6);
     return () => {
       if (ctx.stopFlag) { ctx.stopFlag = false; return 'toohard'; }
-      const s = ctx.bike.ss2k; if (!s) return null;
-      if (s.cad < lim) { lowSince = lowSince === null ? ctx.now() : lowSince; if (ctx.now() - lowSince > 1500) return 'guard'; } else lowSince = null;
+      const liveCad = (ctx.bike.c7 && ctx.bike.c7.cad !== undefined) ? ctx.bike.c7.cad : (ctx.bike.ss2k ? ctx.bike.ss2k.cad : null);
+      if (liveCad === null) return null;
+      if (liveCad < lim) { lowSince = lowSince === null ? ctx.now() : lowSince; if (ctx.now() - lowSince > 1500) return 'guard'; } else lowSince = null;
       return null;
     };
   }

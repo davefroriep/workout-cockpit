@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ss2k-cockpit-v42';
+const CACHE_NAME = 'ss2k-cockpit-v43';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
