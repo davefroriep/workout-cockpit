@@ -760,7 +760,7 @@
 
   <footer>
     <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
-    <span>Rev v7.5 • 2026-11-17 18:58</span>
+    <span>Rev v7.6 • 2026-11-17 19:05</span>
   </footer>
 
   <script src="cal-core.js"></script>
@@ -795,10 +795,13 @@
       let simFast = true; // 15x fast forward in demo mode
       let sim = new SimBike({ lash: 420, flop: 95 });
 
-      // Live BLE state
+      // Live BLE / PC Bridge state
       let ss2kDevice = null;
       let ss2kTxChar = null;
       let c7Device = null;
+      let bridgeWs = null;
+      let bridgeSS2K = false;
+      let bridgeC7 = false;
       let latestSS2K = null;
       let latestC7 = null;
       let loggedFirstSS2K = false;
@@ -918,6 +921,9 @@
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
         } catch (e) { console.warn('Could not save store to localStorage', e); }
+        if (bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+          try { bridgeWs.send(JSON.stringify({ type: 'save_store', store })); } catch (e) {}
+        }
       }
 
       async function autoLoadPrehomedIfNeeded() {
@@ -1266,10 +1272,14 @@
         container.innerHTML = html;
       }
 
-      // Send command to SS2K (real BLE or simulator)
+      // Send command to SS2K (PC bridge, real BLE, or simulator)
       function sendCommand(cmd) {
         if (simMode) {
           sim.send(cmd);
+          return;
+        }
+        if (bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+          bridgeWs.send(JSON.stringify({ type: 'cmd', cmd }));
           return;
         }
         if (ss2kTxChar) {
@@ -1338,12 +1348,12 @@
         unlockAudio();
         ensureWakeLock();
 
-        if (!simMode && t.rider && !c7Device?.gatt?.connected) {
+        if (!simMode && t.rider && !(c7Device?.gatt?.connected || bridgeC7)) {
           bleLog('warn', 'Pair C7 Console first (or turn Demo Sim ON) before running rider tests.');
           showTopError('Pair C7 Console first before starting ' + t.title + '.');
           return;
         }
-        if (!simMode && !ss2kDevice?.gatt?.connected) {
+        if (!simMode && !(ss2kDevice?.gatt?.connected || bridgeSS2K)) {
           bleLog('warn', 'Pair SS2K first before starting ' + t.title + '.');
           showTopError('Pair SS2K first before starting ' + t.title + '.');
           return;
@@ -1823,19 +1833,72 @@
       window.addEventListener('error', e => bleLog('err', 'JS Error: ' + (e.message || e.error)));
       window.addEventListener('unhandledrejection', e => bleLog('err', 'Promise Error: ' + (e.reason?.message || e.reason)));
 
-      // Register Service Worker so GitHub Pages updates immediately
-      if ('serviceWorker' in navigator) {
+      // Register Service Worker only on HTTPS (GitHub Pages), not LAN bridge
+      if ('serviceWorker' in navigator && location.protocol === 'https:') {
         navigator.serviceWorker.register('./sw.js').then(reg => reg.update()).catch(() => {});
       }
 
+      // Auto-connect to PC BLE Bridge when served over LAN HTTP
+      function connectBridge() {
+        if (location.protocol !== 'http:') return;
+        const wsUrl = `ws://${location.host}/ws`;
+        bleLog('info', `Connecting to PC BLE Bridge (${wsUrl})...`);
+        const ws = new WebSocket(wsUrl);
+        bridgeWs = ws;
+        ws.onopen = () => {
+          bleLog('ok', 'PC BLE Bridge connected! Auto-linking SS2K & C7...');
+          simMode = false;
+          updateSimButtons();
+          ensureWakeLock();
+          if (store.range) ws.send(JSON.stringify({ type: 'save_store', store }));
+        };
+        ws.onmessage = ev => {
+          let msg;
+          try { msg = JSON.parse(ev.data); } catch (_) { return; }
+          if (msg.type === 'status') {
+            bridgeSS2K = Boolean(msg.ss2k);
+            bridgeC7 = Boolean(msg.c7);
+            setConnBtn('btnPairSS2K', bridgeSS2K ? 'connected' : 'connecting', bridgeSS2K ? 'SS2K BRIDGE ✓' : 'SS2K CONNECTING…');
+            setConnBtn('btnPairC7', bridgeC7 ? 'connected' : 'connecting', bridgeC7 ? 'C7 BRIDGE ✓' : 'C7 CONNECTING…');
+          } else if (msg.type === 'ss2k' && msg.data) {
+            latestSS2K = msg.data;
+            if (!loggedFirstSS2K) {
+              loggedFirstSS2K = true;
+              bleLog('ok', `SS2K stream active (pos=${msg.data.pos}, pot=${msg.data.pot}).`);
+            }
+            if (activeCtx && !simMode) activeCtx.feed('ss2k', msg.data);
+            updateTelemetryStrip();
+          } else if (msg.type === 'c7' && msg.data) {
+            latestC7 = msg.data;
+            if (!loggedFirstC7) {
+              loggedFirstC7 = true;
+              bleLog('ok', `C7 FTMS stream active (cad=${msg.data.cad}, res=${msg.data.res}, w=${msg.data.w}).`);
+            }
+            if (activeCtx && !simMode) activeCtx.feed('c7', msg.data);
+            updateTelemetryStrip();
+          } else if (msg.type === 'log') {
+            bleLog(msg.lvl || 'info', msg.msg || '');
+          }
+        };
+        ws.onclose = () => {
+          bridgeSS2K = false;
+          bridgeC7 = false;
+          if (bridgeWs === ws) bridgeWs = null;
+          setConnBtn('btnPairSS2K', 'lost', 'BRIDGE LOST — RETRY');
+          setConnBtn('btnPairC7', 'lost', 'BRIDGE LOST — RETRY');
+          setTimeout(connectBridge, 2500);
+        };
+      }
+
       // Initial render + auto-preload pre-homed Part A
-      bleLog('info', 'Rev v7.5 loaded. Tap PAIR SS2K & PAIR C7 CONSOLE.');
+      bleLog('info', 'Rev v7.6 loaded.');
       renderLogs();
       renderTestMatrix();
       renderSelectedTestPanel();
       renderSurfacePanel();
       updateTelemetryStrip();
       autoLoadPrehomedIfNeeded();
+      connectBridge();
     })();
   </script>
 </body>
