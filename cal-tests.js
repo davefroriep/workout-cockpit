@@ -61,7 +61,7 @@
     return ctx.bike.ss2k.pos;
   }
   async function gotoPot(ctx, adc, o) {
-    o = o || {}; const map = ctx.potMap(), tol = o.tol || 6; let target = map.potToPos(adc);
+    o = o || {}; const map = ctx.potMap(), tol = o.tol || 14; let target = map.potToPos(adc);
     await gotoSteps(ctx, target, o);
     let rp = await readPot(ctx, 600);
     for (let i = 0; i < 3 && Math.abs(adc - rp.pot) > tol; i++) {
