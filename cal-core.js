@@ -225,7 +225,7 @@
     };
   };
   Core.plateauQC = function (s, target, o = {}) {
-    const lim = Object.assign({ minC7: 8, cadSd: 1.8, potSd: 4, cadTol: 4, wCv: 0.05 }, o), why = [];
+    const lim = Object.assign({ minC7: 8, cadSd: 3.0, potSd: 12, cadTol: 5, wCv: 0.08 }, o), why = [];
     if (s.nC7 < lim.minC7) why.push(`only ${s.nC7} C7 packets`);
     if (!(s.c7Cad > 0)) why.push('no C7 cadence'); else {
       if (s.c7CadSd > lim.cadSd) why.push(`cadence unsteady (sd ${s.c7CadSd.toFixed(1)})`);
