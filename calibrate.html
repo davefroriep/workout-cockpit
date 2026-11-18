@@ -551,7 +551,7 @@
     <div class="header-top">
       <div class="brand-group">
         <span class="brand-title">SS2K Calibration Cockpit</span>
-        <span class="badge badge-ready" style="font-size:0.7rem;">Rev v8.0</span>
+        <span class="badge badge-ready" style="font-size:0.7rem;">Rev v8.1</span>
         <a class="nav-link" href="index.html">← Workout Cockpit</a>
         <a class="nav-link" href="tuner.html">Tuner</a>
       </div>
@@ -592,6 +592,14 @@
       <div class="telem-box">
         <span class="telem-label">C7 Watts</span>
         <span class="telem-val" id="telC7W" style="color:var(--cyan);">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">Polar H10</span>
+        <span class="telem-val" id="telHR" style="color:var(--red);">--</span>
+      </div>
+      <div class="telem-box">
+        <span class="telem-label">Rec (Work)</span>
+        <span class="telem-val" id="telRec" style="color:var(--green);">0:00</span>
       </div>
     </div>
   </header>
@@ -739,6 +747,7 @@
         </div>
 
         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+          <button type="button" id="btnUploadIntervals" class="btn-primary">♥ Upload Ride to Intervals.icu</button>
           <button type="button" id="btnExportJson">⬇ Download JSON</button>
           <button type="button" id="btnImportJson">⬆ Import JSON</button>
           <button type="button" id="btnExportHeader" class="btn-success">⬇ Export power_table.h</button>
@@ -763,7 +772,7 @@
 
   <footer>
     <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
-    <span>Rev v8.0 • 2026-11-17 19:40</span>
+    <span>Rev v8.1 • 2026-11-17 19:46</span>
   </footer>
 
   <script src="cal-core.js"></script>
@@ -2018,6 +2027,24 @@
             }
             if (activeCtx && !simMode) activeCtx.feed('c7', msg.data);
             updateTelemetryStrip();
+          } else if (msg.type === 'hr') {
+            document.getElementById('telHR').textContent = msg.hr > 25 ? `${msg.hr} bpm` : '--';
+          } else if (msg.type === 'rec') {
+            const m = Math.floor((msg.seconds || 0) / 60);
+            const s = Math.floor((msg.seconds || 0) % 60);
+            document.getElementById('telRec').textContent = `${m}:${String(s).padStart(2, '0')} · ${Math.round(msg.kj || 0)}kJ`;
+            if (msg.hr > 25) document.getElementById('telHR').textContent = `${msg.hr} bpm`;
+          } else if (msg.type === 'upload_result') {
+            const btn = document.getElementById('btnUploadIntervals');
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = msg.ok ? `✓ Uploaded (${msg.kj} kJ)` : '♥ Retry Intervals Upload';
+            }
+            if (msg.ok) {
+              bleLog('ok', `Uploaded to Intervals.icu (id=${msg.id}, ${msg.seconds}s, ${msg.kj} kJ, avgHR ${msg.avg_hr}).`);
+            } else {
+              bleLog('err', `Intervals upload failed: ${msg.error}`);
+            }
           } else if (msg.type === 'log') {
             bleLog(msg.lvl || 'info', msg.msg || '');
           }
@@ -2032,8 +2059,19 @@
         };
       }
 
+      document.getElementById('btnUploadIntervals').addEventListener('click', () => {
+        if (!bridgeWs || bridgeWs.readyState !== WebSocket.OPEN) {
+          bleLog('err', 'Intervals upload requires the PC Bridge connection.');
+          return;
+        }
+        const btn = document.getElementById('btnUploadIntervals');
+        btn.disabled = true;
+        btn.textContent = 'Uploading…';
+        bridgeWs.send(JSON.stringify({ type: 'upload_tcx' }));
+      });
+
       // Initial render + auto-preload pre-homed Part A
-      bleLog('info', 'Rev v8.0 loaded.');
+      bleLog('info', 'Rev v8.1 loaded.');
       renderLogs();
       renderTestMatrix();
       renderSelectedTestPanel();
