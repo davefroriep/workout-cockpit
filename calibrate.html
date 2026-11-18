@@ -760,7 +760,7 @@
 
   <footer>
     <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
-    <span>Rev v7.6 • 2026-11-17 19:05</span>
+    <span>Rev v7.7 • 2026-11-17 19:11</span>
   </footer>
 
   <script src="cal-core.js"></script>
@@ -1470,6 +1470,21 @@
           };
           saveStore();
           bleLog(res.status === 'done' ? 'ok' : 'warn', `Finished ${t.title}: ${res.status.toUpperCase()}`);
+          if (t.rider && !simMode && latestSS2K && store.range) {
+            const easyPos = (store.range.safeMin || 200) + 1200;
+            if (latestSS2K.pos > easyPos + 500) {
+              ui.status(`${t.title} saved — releasing brake to easy spin...`);
+              bleLog('info', `Releasing brake (${latestSS2K.pos} -> ${easyPos} @ 3000 Hz)...`);
+              sendCommand('SET_SPEED:3000');
+              sendCommand('JOG:' + (easyPos - latestSS2K.pos));
+              const tRel = Date.now();
+              await new Promise(r => setTimeout(r, 450));
+              while (Date.now() - tRel < 16000) {
+                if (activeCtx?.aborted || (latestSS2K.run === 0 && Math.abs(latestSS2K.pos - easyPos) <= 20)) break;
+                await new Promise(r => setTimeout(r, 120));
+              }
+            }
+          }
           ui.status(`${t.title} finished (${res.status.toUpperCase()}).`);
           prog.value = 1;
           if (res.status === 'done') {
