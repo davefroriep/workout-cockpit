@@ -359,7 +359,11 @@
   }
 
   // ---------------------------------------------------------------- position tests (grid / down-pass / holdouts)
-  function ladderFor(frac) { let l = [60, 80, 100]; if (frac > 0.3) l = [50, 60, 80, 100]; if (frac > 0.6) l = [40, 50, 60, 80]; return l; }
+  function ladderFor(frac) {
+    if (frac >= 0.49) return [50, 60, 75];
+    if (frac >= 0.39) return [50, 60, 80];
+    return [60, 80, 100];
+  }
   function posTest(def) {
     return Object.assign({}, def, {
       run: async ctx => {
@@ -408,10 +412,10 @@
     { id: 'hyst', part: 'B', title: 'Same pot, both sides', minutes: 7, rider: true, needs: bench(), blurb: 'Compare C7 watts at the same pot reading after arriving from the light vs the heavy side.', steps: ['3 positions x 2 approaches x 80 rpm'], run: runHyst }
   ];
   function bench() { return ['home', 'potmap']; }
-  const NODES = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-  NODES.forEach(f => TESTS.push(posTest({ id: 'g' + Math.round(f * 100), part: 'C', title: `Position ${Math.round(f * 100)}%`, minutes: 5, rider: true, needs: needsGrid, blurb: `Sled to ${Math.round(f * 100)}% of the calibration span, then steady-cadence plateaus.`, steps: ['Sled parks (from the light side)', 'Hold each cadence cue ~40 s'], fracs: [f], approach: 'light' })));
-  TESTS.push(posTest({ id: 'down', part: 'D', title: 'Down-pass', minutes: 7, rider: true, needs: needsGrid, blurb: 'Five positions approached from the HEAVY side at 60 and 80 rpm, to compare with the up pass.', steps: ['80%, 60%, 40%, 20%, 0%'], fracs: [0.8, 0.6, 0.4, 0.2, 0.0], approach: 'heavy', ladderFn: f => f > 0.6 ? [60] : [60, 80] }));
-  TESTS.push(posTest({ id: 'holdout', part: 'D', title: 'Holdouts', minutes: 6, rider: true, needs: needsGrid, blurb: 'Positions and cadences that were NOT used in the grid, to check the fitted curve.', steps: ['25%, 55%, 85% at 70 and 90 rpm'], fracs: [0.25, 0.55, 0.85], approach: 'light', ladderFn: f => f > 0.5 ? [60, 70] : [70, 90] }));
+  const NODES = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
+  NODES.forEach(f => TESTS.push(posTest({ id: 'g' + Math.round(f * 100), part: 'C', title: `Position ${Math.round(f * 100)}%`, minutes: 4, rider: true, needs: needsGrid, blurb: `Sled to ${Math.round(f * 100)}% of the calibration span, then steady-cadence plateaus.`, steps: ['Sled parks (from the light side)', 'Hold each cadence cue ~30 s'], fracs: [f], approach: 'light' })));
+  TESTS.push(posTest({ id: 'down', part: 'D', title: 'Down-pass', minutes: 5, rider: true, needs: needsGrid, blurb: 'Five reachable positions (40% down to 0%) approached from the HEAVY side at 60 and 80 rpm (~20–266 W).', steps: ['40%, 30%, 20%, 10%, 0% at 60 & 80 rpm'], fracs: [0.4, 0.3, 0.2, 0.1, 0.0], approach: 'heavy', ladderFn: () => [60, 80] }));
+  TESTS.push(posTest({ id: 'holdout', part: 'D', title: 'Holdouts', minutes: 5, rider: true, needs: needsGrid, blurb: 'Unseen in-zone positions (15%, 25%, 35%, 45%) to verify the fitted curve across Z2 → VO2.', steps: ['15%, 25%, 35% at 70 & 90 rpm; 45% at 60 & 75 rpm'], fracs: [0.15, 0.25, 0.35, 0.45], approach: 'light', ladderFn: f => f > 0.4 ? [60, 75] : [70, 90] }));
   const PARTS = { A: 'A  Bench (no rider)', B: 'B  Know the C7', C: 'C  Grid: one position per test', D: 'D  Verify' };
 
   const API = { K, TESTS, PARTS, makeCtx, AbortError, helpers: { moveBy, gotoSteps, gotoPot, readPot, hold, nodeTarget, gotoNode, analyzeSeq } };
