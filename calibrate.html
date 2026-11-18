@@ -557,6 +557,7 @@
       <div class="conn-bar">
         <button id="btnPairSS2K" type="button" class="btn-conn">PAIR SS2K</button>
         <button id="btnPairC7" type="button" class="btn-conn">PAIR C7 CONSOLE</button>
+        <button id="btnMetronome" type="button" class="btn-conn connected" title="Toggle Loud Cadence Metronome">🔊 METRONOME: ON</button>
         <button id="btnSimToggle" type="button" class="btn-sim active">DEMO SIM: ON (15x)</button>
         <button id="btnSimSpeed" type="button" title="Toggle Simulator Speed">15x FAST</button>
         <button id="btnTheme" type="button" title="Toggle Light/Black Mode">☀/☾</button>
@@ -692,7 +693,8 @@
                 <div class="coach-val" id="coachWatts">--</div>
               </div>
             </div>
-            <div style="margin-top:10px; display:flex; justify-content:center; gap:8px;">
+            <div style="margin-top:10px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px;">
+              <button type="button" id="btnCoachMetro" class="btn-conn connected">🔊 Metronome: ON</button>
               <button type="button" id="btnCoachTooHard" class="btn-warn">✋ Too Hard / Skip Rest</button>
             </div>
           </div>
@@ -760,7 +762,7 @@
 
   <footer>
     <span>SS2K + Bowflex C7 Closed-Loop Calibration Suite • Auto-Saved Locally</span>
-    <span>Rev v7.7 • 2026-11-17 19:11</span>
+    <span>Rev v7.8 • 2026-11-17 19:25</span>
   </footer>
 
   <script src="cal-core.js"></script>
@@ -808,6 +810,12 @@
       let loggedFirstC7 = false;
       let wakeLock = null;
       let audioCtx = null;
+      let masterComp = null;
+      let metroEnabled = true;
+      let metroRpm = 0;
+      let metroTimer = null;
+      let metroNextTime = 0;
+      let metroBeat = 0;
 
       // ---------- Persistent & Live Diagnostics Logger ----------
       let logEntries = loadLogs();
@@ -883,25 +891,92 @@
         try {
           const Ctx = window.AudioContext || window.webkitAudioContext;
           if (!Ctx) return;
-          if (!audioCtx) audioCtx = new Ctx();
+          if (!audioCtx) {
+            audioCtx = new Ctx();
+            masterComp = audioCtx.createDynamicsCompressor();
+            masterComp.threshold.value = -10;
+            masterComp.knee.value = 12;
+            masterComp.ratio.value = 6;
+            masterComp.attack.value = 0.002;
+            masterComp.release.value = 0.08;
+            masterComp.connect(audioCtx.destination);
+          }
           if (audioCtx.state === 'suspended') audioCtx.resume();
         } catch (e) {}
       }
       function playBeep(freq = 660, dur = 0.14) {
         try {
+          if (!audioCtx) unlockAudio();
           if (!audioCtx) return;
           if (audioCtx.state === 'suspended') audioCtx.resume();
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
-          osc.type = 'sine';
+          osc.type = 'triangle';
           osc.frequency.value = freq || 660;
-          gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.65, audioCtx.currentTime);
           gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.14));
           osc.connect(gain);
-          gain.connect(audioCtx.destination);
+          gain.connect(masterComp || audioCtx.destination);
           osc.start();
           osc.stop(audioCtx.currentTime + (dur || 0.14) + 0.02);
         } catch (e) {}
+      }
+      function scheduleMetroClick(atTime, accent) {
+        try {
+          if (!audioCtx) return;
+          const osc = audioCtx.createOscillator();
+          const osc2 = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc2.type = 'square';
+          const fStart = accent ? 1650 : 1100;
+          const fEnd = accent ? 780 : 520;
+          osc.frequency.setValueAtTime(fStart, atTime);
+          osc.frequency.exponentialRampToValueAtTime(fEnd, atTime + 0.045);
+          osc2.frequency.setValueAtTime(fStart * 1.5, atTime);
+          osc2.frequency.exponentialRampToValueAtTime(fEnd * 1.2, atTime + 0.03);
+          gain.gain.setValueAtTime(0.001, atTime);
+          gain.gain.linearRampToValueAtTime(accent ? 0.95 : 0.68, atTime + 0.003);
+          gain.gain.exponentialRampToValueAtTime(0.001, atTime + 0.065);
+          osc.connect(gain);
+          osc2.connect(gain);
+          gain.connect(masterComp || audioCtx.destination);
+          osc.start(atTime);
+          osc2.start(atTime);
+          osc.stop(atTime + 0.075);
+          osc2.stop(atTime + 0.075);
+        } catch (e) {}
+      }
+      function updateMetronomeButtons() {
+        const txt = metroEnabled ? '🔊 METRONOME: ON' : '🔇 METRONOME: OFF';
+        const txtShort = metroEnabled ? '🔊 Metronome: ON' : '🔇 Metronome: OFF';
+        ['btnMetronome', 'btnCoachMetro'].forEach((id, idx) => {
+          const b = document.getElementById(id);
+          if (!b) return;
+          b.textContent = idx === 0 ? txt : txtShort;
+          b.classList.toggle('connected', metroEnabled);
+        });
+      }
+      function setMetronomeRpm(rpm) {
+        metroRpm = Number(rpm) || 0;
+        if (metroTimer) { clearInterval(metroTimer); metroTimer = null; }
+        if (!metroEnabled || metroRpm <= 0) return;
+        unlockAudio();
+        if (!audioCtx) return;
+        const stepSec = 60 / (metroRpm * 2); // 2 strokes per crank rev (Left / Right)
+        metroNextTime = audioCtx.currentTime + 0.05;
+        metroBeat = 0;
+        const pump = () => {
+          if (!audioCtx || !metroEnabled || metroRpm <= 0) return;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+          while (metroNextTime < audioCtx.currentTime + 0.14) {
+            scheduleMetroClick(metroNextTime, (metroBeat % 2) === 0);
+            metroNextTime += stepSec;
+            metroBeat++;
+          }
+        };
+        pump();
+        metroTimer = setInterval(pump, 25);
       }
 
       // ---------- Store Load + Automatic Pre-Homed Part A Fetch ----------
@@ -1421,9 +1496,11 @@
             if (rpm && rpm > 0) {
               coach.style.display = 'block';
               document.getElementById('coachTarget').textContent = rpm;
+              setMetronomeRpm(rpm);
               if (simMode) sim.setRider(rpm);
             } else {
               coach.style.display = 'none';
+              setMetronomeRpm(0);
               if (simMode) sim.setRider(0);
             }
           }
@@ -1495,6 +1572,7 @@
           bleLog(err.name === 'AbortError' ? 'warn' : 'err', msg);
           ui.status(msg);
         } finally {
+          setMetronomeRpm(0);
           document.getElementById('promptBox').style.display = 'none';
           document.getElementById('cadenceCoach').style.display = 'none';
           document.getElementById('timerDisplay').textContent = '';
@@ -1520,6 +1598,19 @@
       }
 
       // Wire UI Buttons
+      const toggleMetronome = () => {
+        unlockAudio();
+        metroEnabled = !metroEnabled;
+        updateMetronomeButtons();
+        if (metroEnabled) {
+          if (metroRpm > 0) setMetronomeRpm(metroRpm);
+          else playBeep(1200, 0.08);
+        } else {
+          if (metroTimer) { clearInterval(metroTimer); metroTimer = null; }
+        }
+      };
+      document.getElementById('btnMetronome').addEventListener('click', toggleMetronome);
+      document.getElementById('btnCoachMetro').addEventListener('click', toggleMetronome);
       document.getElementById('btnStartTest').addEventListener('click', startSelectedTest);
       const triggerTooHard = () => {
         if (activeCtx) {
